@@ -25,7 +25,7 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
    ```
 
    The management class for OpenFFT library is `OpenFFT::Manager<double>` .  
-   In current version of OpenFFT, 64bit float (double) version is only implemented.
+   In current version of OpenFFT, that is only implemented in 64bit float (double) version.
 
  - Step 1: Initialize manager.  
    ```c++
@@ -60,7 +60,7 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
     //--- copy data for c2c 4D FFT
     OpenFFT::dcomplex GlobalInput[N1][N2][N3][N4];
     std::vector<OpenFFT::dcomplex> input_buffer;
-    fft_mngr.copy_3d_array_into_input_buffer( &( GlobalInput[0][0][0][0] ), input_buffer );
+    fft_mngr.copy_4d_array_into_input_buffer( &( GlobalInput[0][0][0][0] ), input_buffer );
     ```
     All 'buffer' input/output accepts both of reference to `std::vector<T>` and pointer to buffer array (`double *` or `OpenFFT::dcomplex *`).  
     Using `std::vector<T>` is recommended because the buffer length is checked for input buffer and resized for output buffer in this API.
@@ -87,13 +87,13 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
     const int tgt_proc = 0; // MPI proc id
     fft_mngr.gather_3d_array( &( GlobalOutput[0][0][0] ), output_buffer, tgt_proc );
 
-    //--- gather c2c 4D FFT
+    //--- gather for c2c 4D FFT
     OpenFFT::dcomplex GlobalOutput[N1][N2][N3][N4];
     const int tgt_proc = 0; // MPI proc id
     fft_mngr.gather_4d_array( &( GlobalOutput[0][0][0][0] ), output_buffer, tgt_proc );
     ```
     Also `allgather_3d_array( global_output, output_buffer )`  
-    and `allgather_4d_array( global_output, output_buffer )` functions are available to gather and broadcast 'GlobalOutput' data for all MPI processes.
+    and `allgather_4d_array( global_output, output_buffer )` functions are available to gather and broadcast the 'GlobalOutput' array for all MPI processes.
 
    - Step 4-2: Convert output buffer into input buffer for Inverse FFT (available in c2c_3D mode only).  
      ```c++
