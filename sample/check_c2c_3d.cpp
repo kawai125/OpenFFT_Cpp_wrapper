@@ -356,6 +356,59 @@ int main(int argc, char* argv[])
                        &(Output[0][0][0]), &(Output_ref[0][0][0]) );
     }
 
+
+    //--- returning functor test
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(myid == 0){
+        printf("\n");
+        printf("returning functer test.\n");
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    struct ReduceValue{
+        OpenFFT::dcomplex v {0.0, 0.0};
+        double            factor = 1.0;
+        void operator () (const OpenFFT::dcomplex arr_v, const OpenFFT::dcomplex buf_v){
+            this->v.r += arr_v.r * buf_v.r / this->factor;
+            this->v.i += arr_v.i * buf_v.i / this->factor;
+        }
+    };
+    ReduceValue reduce_value;
+    reduce_value.factor = factor;
+    const auto local_sum = fft_mngr.apply_3d_array_with_output_buffer( &(Input[0][0][0]),
+                                                                       output_buffer,
+                                                                       reduce_value );
+
+    OpenFFT::dcomplex sum_v;
+    MPI_Allreduce(&local_sum.v, &sum_v, 1,
+                  MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
+
+    OpenFFT::dcomplex sum_v_ref;
+    for(i=0;i<N1;i++){
+        for(j=0;j<N2;j++){
+            for(k=0;k<N3;k++){
+                sum_v_ref.r += Input[i][j][k].r * Output[i][j][k].r;
+                sum_v_ref.i += Input[i][j][k].i * Output[i][j][k].i;
+            }
+        }
+    }
+    if(myid == 0){
+        bool check_flag = true;
+        if( std::abs(sum_v.r - sum_v_ref.r) > 0.0001 ||
+            std::abs(sum_v.i - sum_v_ref.i) > 0.0001   ){
+            check_flag = false;
+            printf("  ERROR: reduced sum_v = (% 6.5f,% 6.5f), ref = (% 6.5f,% 6.5f)\n",
+                   sum_v.r, sum_v.i, sum_v_ref.r, sum_v_ref.i);
+        }
+
+        if( ! check_flag ){
+            printf("   Check done. Some elements are incorrect.\n");
+        } else {
+            printf("   Check done. All elements are correct.\n");
+        }
+    }
+
+
     //--- inverse FFT test
     MPI_Barrier(MPI_COMM_WORLD);
     if(myid == 0){
@@ -405,6 +458,17 @@ int main(int argc, char* argv[])
         }
     }
     fft_mngr.allgather_3d_array( &(IFFT_Output[0][0][0]) , output_buffer);
+
+    //--- normalize Inverse FFT result
+    const double N_inv = 1.0/static_cast<double>(N1*N2*N3);
+    for(i=0;i<N1;i++){
+        for(j=0;j<N2;j++){
+            for(k=0;k<N3;k++){
+                IFFT_Output[i][j][k].r *= N_inv;
+                IFFT_Output[i][j][k].i *= N_inv;
+            }
+        }
+    }
 
     //--- check Inverse FFT result
     MPI_Barrier(MPI_COMM_WORLD);

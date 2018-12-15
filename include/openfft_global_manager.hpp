@@ -303,11 +303,12 @@ namespace OpenFFT {
                 //--- performe forword FFT
                 openfft_exec_c2c_3d(input, output);
 
-                //--- get complex conjugate and divide by N
-                const double N_inv = 1.0/static_cast<double>(this->n_x*this->n_y*this->n_z);
+                //--- get complex conjugate
+                //       note: FFT_BACKWARD transforme of FFTW3, it not devide by (NZ * Ny * Zx).
+                //             this implementation take compatibility with FFTW3.
                 for(int i=0; i<this->my_n_grid_out; ++i){
-                    output[i].r =   output[i].r * N_inv;
-                    output[i].i = - output[i].i * N_inv;
+                    output[i].r =   output[i].r;
+                    output[i].i = - output[i].i;
                 }
             }
             void fft_c2c_4d_forward(complex_t *input,
@@ -346,48 +347,48 @@ namespace OpenFFT {
             template <class T_3d ,
                       class T_buf,
                       class ApplyFunc >
-            void apply_3d_array_with_input_buffer(T_3d      *array_3d,
-                                                  T_buf     *buffer,
-                                                  ApplyFunc  func     ) const {
-                this->_apply_3d_array_with_input_buffer_impl(array_3d, buffer,
-                                                             this->get_n_grid_in(),
-                                                             this->get_index_in(),
-                                                             func );
+            ApplyFunc apply_3d_array_with_input_buffer(T_3d      *array_3d,
+                                                       T_buf     *buffer,
+                                                       ApplyFunc  func     ) const {
+                return this->_apply_3d_array_with_input_buffer_impl(array_3d, buffer,
+                                                                    this->get_n_grid_in(),
+                                                                    this->get_index_in(),
+                                                                    func );
             }
             template <class T_3d ,
                       class T_buf,
                       class ApplyFunc >
-            void apply_3d_array_with_input_buffer(      T_3d      *array_3d,
-                                                        T_buf     *buffer,
-                                                        ApplyFunc  func,
-                                                  const int        i_proc   ) const {
-                this->_apply_3d_array_with_input_buffer_impl(array_3d, buffer,
-                                                             this->get_n_grid_in(i_proc),
-                                                             this->get_index_in( i_proc),
-                                                             func );
+            ApplyFunc apply_3d_array_with_input_buffer(      T_3d      *array_3d,
+                                                             T_buf     *buffer,
+                                                             ApplyFunc  func,
+                                                       const int        i_proc   ) const {
+                return this->_apply_3d_array_with_input_buffer_impl(array_3d, buffer,
+                                                                    this->get_n_grid_in(i_proc),
+                                                                    this->get_index_in( i_proc),
+                                                                    func );
             }
             template <class T_3d ,
                       class T_buf,
                       class ApplyFunc >
-            void apply_4d_array_with_input_buffer(T_3d      *array_4d,
-                                                  T_buf     *buffer,
-                                                  ApplyFunc  func     ) const {
-                this->_apply_4d_array_with_input_buffer_impl(array_4d, buffer,
-                                                             this->get_n_grid_in(),
-                                                             this->get_index_in(),
-                                                             func );
+            ApplyFunc apply_4d_array_with_input_buffer(T_3d      *array_4d,
+                                                       T_buf     *buffer,
+                                                       ApplyFunc  func     ) const {
+                return this->_apply_4d_array_with_input_buffer_impl(array_4d, buffer,
+                                                                    this->get_n_grid_in(),
+                                                                    this->get_index_in(),
+                                                                    func );
             }
             template <class T_3d ,
                       class T_buf,
                       class ApplyFunc >
-            void apply_4d_array_with_input_buffer(      T_3d      *array_4d,
-                                                        T_buf     *buffer,
-                                                        ApplyFunc  func,
-                                                  const int        i_proc   ) const {
-                this->_apply_4d_array_with_input_buffer_impl(array_4d, buffer,
-                                                             this->get_n_grid_in(i_proc),
-                                                             this->get_index_in( i_proc),
-                                                             func );
+            ApplyFunc apply_4d_array_with_input_buffer(      T_3d      *array_4d,
+                                                             T_buf     *buffer,
+                                                             ApplyFunc  func,
+                                                       const int        i_proc   ) const {
+                return this->_apply_4d_array_with_input_buffer_impl(array_4d, buffer,
+                                                                    this->get_n_grid_in(i_proc),
+                                                                    this->get_index_in( i_proc),
+                                                                    func );
             }
 
             //----------------------------------------------------------------------
@@ -396,48 +397,48 @@ namespace OpenFFT {
             template <class T_3d ,
                       class T_buf,
                       class ApplyFunc >
-            void apply_3d_array_with_output_buffer(T_3d      *array_3d,
-                                                   T_buf     *buffer,
-                                                   ApplyFunc  func     ) const {
-                this->_apply_3d_array_with_output_buffer_impl(array_3d, buffer,
-                                                              this->get_n_grid_out(),
-                                                              this->get_index_out(),
-                                                              func );
+            ApplyFunc apply_3d_array_with_output_buffer(T_3d      *array_3d,
+                                                        T_buf     *buffer,
+                                                        ApplyFunc  func     ) const {
+                return this->_apply_3d_array_with_output_buffer_impl(array_3d, buffer,
+                                                                     this->get_n_grid_out(),
+                                                                     this->get_index_out(),
+                                                                     func );
             }
             template <class T_3d ,
                       class T_buf,
                       class ApplyFunc >
-            void apply_3d_array_with_output_buffer(      T_3d      *array_3d,
-                                                         T_buf     *buffer,
-                                                         ApplyFunc  func,
-                                                   const int        i_proc   ) const {
-                this->_apply_3d_array_with_output_buffer_impl(array_3d, buffer,
-                                                              this->get_n_grid_out(i_proc),
-                                                              this->get_index_out( i_proc),
-                                                              func );
+            ApplyFunc apply_3d_array_with_output_buffer(      T_3d      *array_3d,
+                                                              T_buf     *buffer,
+                                                              ApplyFunc  func,
+                                                        const int        i_proc   ) const {
+                return this->_apply_3d_array_with_output_buffer_impl(array_3d, buffer,
+                                                                     this->get_n_grid_out(i_proc),
+                                                                     this->get_index_out( i_proc),
+                                                                     func );
             }
             template <class T_3d ,
                       class T_buf,
                       class ApplyFunc >
-            void apply_4d_array_with_output_buffer(T_3d      *array_4d,
-                                                   T_buf     *buffer,
-                                                   ApplyFunc  func     ) const {
-                this->_apply_4d_array_with_output_buffer_impl(array_4d, buffer,
-                                                              this->get_n_grid_out(),
-                                                              this->get_index_out(),
-                                                              func );
+            ApplyFunc apply_4d_array_with_output_buffer(T_3d      *array_4d,
+                                                        T_buf     *buffer,
+                                                        ApplyFunc  func     ) const {
+                return this->_apply_4d_array_with_output_buffer_impl(array_4d, buffer,
+                                                                     this->get_n_grid_out(),
+                                                                     this->get_index_out(),
+                                                                     func );
             }
             template <class T_3d ,
                       class T_buf,
                       class ApplyFunc >
-            void apply_4d_array_with_output_buffer(      T_3d      *array_4d,
-                                                         T_buf     *buffer,
-                                                         ApplyFunc  func,
-                                                   const int        i_proc   ) const {
-                this->_apply_4d_array_with_output_buffer_impl(array_4d, buffer,
-                                                              this->get_n_grid_out(i_proc),
-                                                              this->get_index_out( i_proc),
-                                                              func );
+            ApplyFunc apply_4d_array_with_output_buffer(      T_3d      *array_4d,
+                                                              T_buf     *buffer,
+                                                              ApplyFunc  func,
+                                                        const int        i_proc   ) const {
+                return this->_apply_4d_array_with_output_buffer_impl(array_4d, buffer,
+                                                                     this->get_n_grid_out(i_proc),
+                                                                     this->get_index_out( i_proc),
+                                                                     func );
             }
 
             //----------------------------------------------------------------------
@@ -702,13 +703,13 @@ namespace OpenFFT {
             template <class T_arr,
                       class T_buf,
                       class ApplyFunc >
-            void _apply_3d_array_with_input_buffer_impl(      T_arr     *array_3d,
-                                                              T_buf     *buffer,
-                                                        const int        n_grid_in,
-                                                        const IndexList &index_in,
-                                                              ApplyFunc  func      ) const {
+            ApplyFunc _apply_3d_array_with_input_buffer_impl(      T_arr     *array_3d,
+                                                                   T_buf     *buffer,
+                                                             const int        n_grid_in,
+                                                             const IndexList &index_in,
+                                                                   ApplyFunc  func      ) const {
 
-                if(n_grid_in <= 0) return;
+                if(n_grid_in <= 0) return func;
 
                 if(this->grid_type != FFT_GridType::r2c_3D &&
                    this->grid_type != FFT_GridType::c2c_3D   ){
@@ -756,6 +757,7 @@ namespace OpenFFT {
                         }
                     }
                 }
+
                 #ifndef NDEBUG
                     if( ii != n_grid_in ){
                         std::ostringstream oss;
@@ -765,17 +767,19 @@ namespace OpenFFT {
                         throw std::logic_error(oss.str());
                     }
                 #endif
+
+                return func;
             }
             template <class T_arr,
                       class T_buf,
                       class ApplyFunc >
-            void _apply_3d_array_with_output_buffer_impl(      T_arr     *array_3d,
-                                                               T_buf     *buffer,
-                                                         const int        n_grid_out,
-                                                         const IndexList &index_out,
-                                                               ApplyFunc  func       ) const {
+            ApplyFunc _apply_3d_array_with_output_buffer_impl(      T_arr     *array_3d,
+                                                                    T_buf     *buffer,
+                                                              const int        n_grid_out,
+                                                              const IndexList &index_out,
+                                                                    ApplyFunc  func       ) const {
 
-                if(n_grid_out <= 0) return;
+                if(n_grid_out <= 0) return func;
 
                 if(this->grid_type != FFT_GridType::r2c_3D &&
                    this->grid_type != FFT_GridType::c2c_3D   ){
@@ -826,6 +830,7 @@ namespace OpenFFT {
                         }
                     }
                 }
+
                 #ifndef NDEBUG
                     if( ii != n_grid_out ){
                         std::ostringstream oss;
@@ -835,18 +840,20 @@ namespace OpenFFT {
                         throw std::logic_error(oss.str());
                     }
                 #endif
+
+                return func;
             }
 
             template <class T_arr,
                       class T_buf,
                       class ApplyFunc >
-            void _apply_4d_array_with_input_buffer_impl(      T_arr     *array_4d,
-                                                              T_buf     *buffer,
-                                                        const int        n_grid_in,
-                                                        const IndexList &index_in,
-                                                              ApplyFunc  func      ) const {
+            ApplyFunc _apply_4d_array_with_input_buffer_impl(      T_arr     *array_4d,
+                                                                   T_buf     *buffer,
+                                                             const int        n_grid_in,
+                                                             const IndexList &index_in,
+                                                                   ApplyFunc  func      ) const {
 
-                if(n_grid_in <= 0) return;
+                if(n_grid_in <= 0) return func;
 
                 if(this->grid_type != FFT_GridType::c2c_4D ){
                        std::ostringstream oss;
@@ -947,6 +954,7 @@ namespace OpenFFT {
                         }
                     }
                 }
+
                 #ifndef NDEBUG
                     if( ii != n_grid_in ){
                         std::ostringstream oss;
@@ -956,17 +964,19 @@ namespace OpenFFT {
                         throw std::logic_error(oss.str());
                     }
                 #endif
+
+                return func;
             }
             template <class T_arr,
                       class T_buf,
                       class ApplyFunc >
-            void _apply_4d_array_with_output_buffer_impl(      T_arr     *array_4d,
-                                                               T_buf     *buffer,
-                                                         const int        n_grid_out,
-                                                         const IndexList &index_out,
-                                                               ApplyFunc  func       ) const {
+            ApplyFunc _apply_4d_array_with_output_buffer_impl(      T_arr     *array_4d,
+                                                                    T_buf     *buffer,
+                                                              const int        n_grid_out,
+                                                              const IndexList &index_out,
+                                                                    ApplyFunc  func       ) const {
 
-                if(n_grid_out <= 0) return;
+                if(n_grid_out <= 0) return func;
 
                 if(this->grid_type != FFT_GridType::c2c_4D ){
                        std::ostringstream oss;
@@ -1067,6 +1077,7 @@ namespace OpenFFT {
                         }
                     }
                 }
+
                 #ifndef NDEBUG
                     if( ii != n_grid_out ){
                         std::ostringstream oss;
@@ -1076,6 +1087,8 @@ namespace OpenFFT {
                         throw std::logic_error(oss.str());
                     }
                 #endif
+
+                return func;
             }
 
             void _collect_buffer_info(){

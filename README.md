@@ -105,12 +105,14 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
      ```c++
      fft_mngr.fft_c2c_3d_backward( input_buffer, output_buffer );
      ```
+     This function is compatible with backward DFT compute of FFTW3.
 
    - step 5: Finalize.  
      ```c++
      fft_mngr.finalize();
      ```
-     The OpenFFT configurations are shared in global manager object (It allows you to make many instance of OpenFFT::Manager<>). It is recommended that you call the 'finalize' function at once in 'finalize' part of your program.
+     The OpenFFT configurations are shared in global manager object (It allows you to make many instance of OpenFFT::Manager<>).  
+     It is recommended that you call the 'finalize' function at once in 'finalize' part of your program.
 
 ## Other APIs
 
@@ -133,7 +135,7 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
      std::array<int, 8> Index_Out   = fft_mngr.get_index_out(  tgt_proc );
      ```
 
-   - Apply your function between Global 3D/4D array and local input/output buffer.  
+   - Apply your function between global 3D/4D array and local input/output buffer.  
      ```c++
      //--- example 1: collect real part of output.
      double RealGlobalOutput[N1][N2][N3];
@@ -158,6 +160,30 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
      fft_mngr.apply_3d_array_with_output_buffer( &(RealGlobalOutput[0][0][0]), output_buffer_at_proc_i, your_func, proc_i);
      ```
      The implementations of `OpenFFT::Manager<>::apply_[3d/4d]_array_with_[input/output]_buffer()` are used in other API between global 3D/4D array and local buffer. These 'apply' functions can accept explicit MPI process ID.
+
+     These 'apply' functions return the functor that you passed. It can use for reducing value from local buffer.  
+     ```c++
+     //--- calculate sum of element-wise product between ApplyMatrix array and Global output array.
+     double ApplyMatrix[N1][N2][N3]
+     std::vector<OpenFFT::dcomplex> output_buffer;
+
+     //--- reduce real part product
+     struct ReduceValue{
+         double v = 0.0;
+         void operator () (const double arr_v, const OpenFFT::dcomplex buf_v){
+             this->v += arr_v*buf_v.r;
+         }
+     };
+     ReduceValue reduce_value;
+
+     //--- get local sum
+     const ReduceValue local_sum = fft_mngr.apply_3d_array_with_output_buffer( &(ApplyMatrix[0][0][0]), output_buffer, reduce_value );
+
+     //--- get global sum
+     double global_sum;
+     MPI_Allreduce( &local_sum.v, &global_sum, 1
+                   MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+     ```
 
    - Display parameters for `convert_output_to_input()` (available in c2c_3D mode only).  
      ```c++
