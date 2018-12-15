@@ -9,9 +9,23 @@ The implementations of OpenFFT_Cpp_wrapper (inside `./include` directory) are re
 The sample codes (inside `./sample` directory) are released under the GPLv3 or any later version license because they written based on the original sample codes of the OpenFFT library.
 
 ## How to use
-Include the `./include/openfft.hpp` in your source code, then compile and link with the `libopenfft.a` of OpenFFT.
+Include the `./include/openfft.hpp` in your source code, then compile and link with the `libopenfft.a` of OpenFFT.  
+__This library requires compatibility of C++11 standard for C++ compiler.__
 
 ## Calling wrapper function from your C++ program
+ - Definition of Interface.  
+   All definitions are implemented in the namespace of `OpenFFT::` .  
+
+   The complex type for OpenFFT library is `OpenFFT::dcomplex` .  The members of dcomplex are shown in below.  
+   ```c++
+   OpwnFFT::dcomplex complex_data;
+
+   double real_part = complex_data.r;
+   double imag_part = complex_data.i;
+   ```
+
+   The management class for OpenFFT library is `OpenFFT::Manager<double>` .  
+   In current version of OpenFFT, 64bit float (double) version is only implemented.
 
  - Step 1: Initialize manager.  
    ```c++
@@ -48,7 +62,8 @@ Include the `./include/openfft.hpp` in your source code, then compile and link w
     std::vector<OpenFFT::dcomplex> input_buffer;
     fft_mngr.copy_3d_array_into_input_buffer( &( GlobalInput[0][0][0][0] ), input_buffer );
     ```
-    All 'buffer' input/output accepts both of reference to `std::vector<T>` and pointer to buffer array.
+    All 'buffer' input/output accepts both of reference to `std::vector<T>` and pointer to buffer array (`double *` or `OpenFFT::dcomplex *`).  
+    Using `std::vector<T>` is recommended because the buffer length is checked for input buffer and resized for output buffer in this API.
 
   - Step 3: Execute FFT.  
     ```c++
@@ -78,13 +93,13 @@ Include the `./include/openfft.hpp` in your source code, then compile and link w
     fft_mngr.gather_4d_array( &( GlobalOutput[0][0][0][0] ), output_buffer, tgt_proc );
     ```
     Also `allgather_3d_array( global_output, output_buffer )`  
-    and `allgather_4d_array( global_output, output_buffer )` functions are available.
+    and `allgather_4d_array( global_output, output_buffer )` functions are available to gather and broadcast 'GlobalOutput' data for all MPI processes.
 
    - Step 4-2: Convert output buffer into input buffer for Inverse FFT (available in c2c_3D mode only).  
      ```c++
      fft_mngr.convert_output_to_input( input_buffer, output_buffer );
      ```
-     It communicate output_buffer by MPI_Alltoallv() and shape received data into input_buffer.
+     It communicate 'output_buffer' by using MPI_Alltoallv() and shape received data into input_buffer.
 
    - Step 4-3: execute Inverse FFT (available in c2c_3D mode only).  
      ```c++
@@ -123,7 +138,7 @@ Include the `./include/openfft.hpp` in your source code, then compile and link w
      //--- example 1: collect real part of output.
      double RealGlobalOutput[N1][N2][N3];
 
-     //------ using fanctor
+     //------ using functor
      struct CopyRealpartFromBuffer {
          void operator () (double &arr_v, const OpenFFT::dcomplex &buf_v){
              arr_v = buf_v.r;
