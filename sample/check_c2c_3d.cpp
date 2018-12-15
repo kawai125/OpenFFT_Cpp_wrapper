@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
     int offt_measure,measure_time,print_memory;
     int i,j,k;
     double factor;
-    
+
     OpenFFT::dcomplex Input[N1][N2][N3],Output[N1][N2][N3];
     OpenFFT::dcomplex Out[N1][N2][N3]  ,Output_ref[N1][N2][N3];
     OpenFFT::dcomplex IFFT_Output[N1][N2][N3];
@@ -334,7 +334,7 @@ int main(int argc, char* argv[])
     MPI_Barrier(MPI_COMM_WORLD);
 
     //--- convert output buffer into input buffer.
-    fft_mngr.convert_output_to_input(output_buffer, input_buffer);
+    fft_mngr.convert_output_to_input(input_buffer, output_buffer);
 
 
     //--- check converted input_buffer

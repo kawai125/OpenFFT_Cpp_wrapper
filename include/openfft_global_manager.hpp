@@ -443,8 +443,8 @@ namespace OpenFFT {
             //----------------------------------------------------------------------
             //    output_buffer to input_buffer converter
             //----------------------------------------------------------------------
-            void convert_output_to_input(const complex_t *output_buf,
-                                               complex_t *input_buf  ){
+            void convert_output_to_input(      complex_t *input_buf,
+                                         const complex_t *output_buf){
 
                 if( this->grid_type != FFT_GridType::c2c_3D ){
                     throw std::logic_error("convert function is implemented for c2c_3D only.");

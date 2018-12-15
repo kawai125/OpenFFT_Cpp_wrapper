@@ -447,18 +447,18 @@ namespace OpenFFT {
         //    output_buffer to input_buffer converter
         //----------------------------------------------------------------------
         template <class Alloc_L, class Alloc_R>
-        void convert_output_to_input(const std::vector<complex_t, Alloc_L> &output_buf,
-                                           std::vector<complex_t, Alloc_R> &input_buf  ){
+        void convert_output_to_input(      std::vector<complex_t, Alloc_L> &input_buf,
+                                     const std::vector<complex_t, Alloc_R> &output_buf){
 
             //--- check buffer size
             this->_check_buffer_length( output_buf, this->get_n_grid_out() );
             input_buf.resize( this->get_n_grid_in() );
 
-            this->convert_output_to_input(output_buf.data(), input_buf.data());
+            this->convert_output_to_input(input_buf.data(), output_buf.data());
         }
-        void convert_output_to_input(const complex_t *output_buf,
-                                           complex_t *input_buf  ){
-            _impl::fp64_global_mngr.convert_output_to_input(output_buf, input_buf);
+        void convert_output_to_input(      complex_t *input_buf,
+                                     const complex_t *output_buf){
+            _impl::fp64_global_mngr.convert_output_to_input(input_buf, output_buf);
         }
 
         //----------------------------------------------------------------------

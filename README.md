@@ -82,7 +82,7 @@ Include the `./include/openfft.hpp` in your source code, then compile and link w
 
    - Step 4-2: Convert output buffer into input buffer for Inverse FFT (available in c2c_3D mode only).  
      ```c++
-     fft_mngr.convert_output_to_input( output_buffer, input_buffer );
+     fft_mngr.convert_output_to_input( input_buffer, output_buffer );
      ```
      It communicate output_buffer by MPI_Alltoallv() and shape received data into input_buffer.
 
