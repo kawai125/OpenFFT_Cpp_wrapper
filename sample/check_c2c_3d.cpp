@@ -77,12 +77,13 @@ int main(int argc, char* argv[])
 {
     int numprocs,myid;
     int const N1=2,N2=3,N3=4;
-    dcomplex Input[N1][N2][N3],Output[N1][N2][N3];
-    dcomplex Out[N1][N2][N3]  ,Output_ref[N1][N2][N3];
-    dcomplex IFFT_Output[N1][N2][N3];
     int offt_measure,measure_time,print_memory;
     int i,j,k;
     double factor;
+    
+    OpenFFT::dcomplex Input[N1][N2][N3],Output[N1][N2][N3];
+    OpenFFT::dcomplex Out[N1][N2][N3]  ,Output_ref[N1][N2][N3];
+    OpenFFT::dcomplex IFFT_Output[N1][N2][N3];
 
     /* MPI */
     MPI_Init(&argc, &argv);
@@ -181,13 +182,13 @@ int main(int argc, char* argv[])
 
 
     //--- perform FFT through OpenFFT::Manager<>
-    std::vector<dcomplex> input_buffer, output_buffer;
+    std::vector<OpenFFT::dcomplex> input_buffer, output_buffer;
     input_buffer.reserve( My_Max_NumGrid);
     output_buffer.reserve(My_Max_NumGrid);
     input_buffer.resize( My_NumGrid_In );
     output_buffer.resize(My_NumGrid_Out);
-    std::fill( input_buffer.begin() , input_buffer.end() , dcomplex{0.0, 0.0} );
-    std::fill( output_buffer.begin(), output_buffer.end(), dcomplex{0.0, 0.0} );
+    std::fill( input_buffer.begin() , input_buffer.end() , OpenFFT::dcomplex{0.0, 0.0} );
+    std::fill( output_buffer.begin(), output_buffer.end(), OpenFFT::dcomplex{0.0, 0.0} );
 
     //------ copy 3D array data into local input buffer
     fft_mngr.copy_3d_array_into_input_buffer( &(Input[0][0][0]) , input_buffer);
@@ -196,7 +197,7 @@ int main(int argc, char* argv[])
     /* FFT transform */
 
     //------ call exec fft through OpenFFT::Manager
-    //          "buffer" argument accepts std::vector<dcomplex> or pointer <dcomplex*>.
+    //          "buffer" argument accepts std::vector<OpenFFT::dcomplex> or pointer <OpenFFT::dcomplex*>.
     fft_mngr.fft_c2c_3d_forward(input_buffer, output_buffer);
 
 
@@ -247,7 +248,7 @@ int main(int argc, char* argv[])
     /* another copy method: using functor and "apply" API
     struct CopyFromBufferWithCalc{
         double n_inv_sqrt;
-        void operator () (dcomplex &arr_v, const dcomplex &buf_v){
+        void operator () (OpenFFT::dcomplex &arr_v, const OpenFFT::dcomplex &buf_v){
             arr_v.r = buf_v.r * this->n_inv_sqrt;
             arr_v.i = buf_v.i * this->n_inv_sqrt;
         }
@@ -337,7 +338,7 @@ int main(int argc, char* argv[])
 
 
     //--- check converted input_buffer
-    std::vector<dcomplex> ifft_input_buffer_ref;
+    std::vector<OpenFFT::dcomplex> ifft_input_buffer_ref;
 
     //------ this API automatically resize std::vector<>
     fft_mngr.copy_3d_array_into_input_buffer( &(Output[0][0][0]), ifft_input_buffer_ref );

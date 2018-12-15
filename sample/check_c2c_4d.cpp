@@ -57,13 +57,16 @@ int main(int argc, char* argv[])
 {
     int numprocs,myid;
     int const N1=3,N2=4,N3=5,N4=6;
-    dcomplex Input[N1][N2][N3][N4],Output[N1][N2][N3][N4];
-    dcomplex Out[N1][N2][N3][N4],Output_ref[N1][N2][N3][N4];
     int offt_measure,measure_time,print_memory;
     int i,j,k,m;
     double factor;
     FILE *file_in;
     char BUF[1000];
+
+    OpenFFT::dcomplex Input[N1][N2][N3][N4];
+    OpenFFT::dcomplex Out[N1][N2][N3][N4];
+    OpenFFT::dcomplex Output[N1][N2][N3][N4];
+    OpenFFT::dcomplex Output_ref[N1][N2][N3][N4];
 
     /* MPI */
     MPI_Init(&argc, &argv);
@@ -119,7 +122,7 @@ int main(int argc, char* argv[])
 
     /* Allocate local input and output arrays */
 
-    std::vector<dcomplex> input_buffer, output_buffer;
+    std::vector<OpenFFT::dcomplex> input_buffer, output_buffer;
     input_buffer.resize( My_NumGrid_In );
     output_buffer.resize(My_NumGrid_Out);
 

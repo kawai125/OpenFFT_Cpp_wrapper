@@ -13,10 +13,10 @@
 #include <iostream>
 
 
-typedef struct { double r,i; } dcomplex;
-
-
 namespace OpenFFT {
+
+    //--- complex type for OpenFFT
+    typedef struct { double r,i; } dcomplex;
 
     //--- functor sample for buffer manipulator
     template <class Tarr, class Tbuf>
@@ -95,9 +95,9 @@ extern "C" {
 			                          int offt_measure,
 			                          int measure_time, int print_memory);
 
-    extern double openfft_exec_c2c_3d(dcomplex *Rhor, dcomplex *Rhok);
-    extern double openfft_exec_r2c_3d(double   *Rhor, dcomplex *Rhok);
-    extern double openfft_exec_c2c_4d(dcomplex *Rhor, dcomplex *Rhok);
+    extern double openfft_exec_c2c_3d(OpenFFT::dcomplex *Rhor, OpenFFT::dcomplex *Rhok);
+    extern double openfft_exec_r2c_3d(         double   *Rhor, OpenFFT::dcomplex *Rhok);
+    extern double openfft_exec_c2c_4d(OpenFFT::dcomplex *Rhor, OpenFFT::dcomplex *Rhok);
 
     extern double openfft_finalize();
     extern void   openfft_dtime(double *time);

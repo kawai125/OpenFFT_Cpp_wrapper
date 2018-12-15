@@ -18,11 +18,13 @@ int main(int argc, char* argv[])
   int numprocs,myid;
   int const N1=2,N2=3,N3=4;
   int N3r=N3/2+1;
-  double   Input[N1][N2][N3];
-  dcomplex Output[N1][N2][N3r],Output_ref[N1][N2][N3r];
   int offt_measure,measure_time,print_memory;
   int i,j,k,l;
   double factor;
+
+  double            Input[N1][N2][N3];
+  OpenFFT::dcomplex Output[N1][N2][N3r];
+  OpenFFT::dcomplex Output_ref[N1][N2][N3r];
 
   /* MPI */
   MPI_Init(&argc, &argv);
@@ -78,8 +80,8 @@ int main(int argc, char* argv[])
 
   /* Allocate local input and output arrays */
 
-  std::vector<double>   real_input_buffer;
-  std::vector<dcomplex> output_buffer;
+  std::vector<double>            real_input_buffer;
+  std::vector<OpenFFT::dcomplex> output_buffer;
 
   real_input_buffer.resize(My_Max_NumGrid);
   output_buffer.resize(My_Max_NumGrid);
@@ -128,7 +130,7 @@ int main(int argc, char* argv[])
   /* FFT transform */
 
   //------ call exec fft through OpenFFT::Manager
-  //          "buffer" argument accepts std::vector<dcomplex> or pointer <dcomplex*>.
+  //          "buffer" argument accepts std::vector<OpenFFT::dcomplex> or pointer <OpenFFT::dcomplex*>.
   fft_mngr.fft_r2c_3d_forward(real_input_buffer, output_buffer);
 
   /* Get local output */

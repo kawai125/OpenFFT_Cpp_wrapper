@@ -1,7 +1,8 @@
 # OpenFFT_Cpp_wrapper
 
 ## Introduction
-C++ interface & utilities for [OpenFFT](http://www.openmx-square.org/openfft/) libraries.
+C++ interface & utilities for [OpenFFT](http://www.openmx-square.org/openfft/) library.  
+This wrapper provides array-index management between global 3D/4D array data and distributed buffer data for OpenFFT.
 
 ## License
 The implementations of OpenFFT_Cpp_wrapper (inside `./include` directory) is provided MIT license.
@@ -11,6 +12,7 @@ The sample codes (inside `./sample` directory) are provided GPLv3 or any later v
 Include `openfft.hpp` at the `./include` directory in your source code, then compile and link with `libopenfft.a` of OpenFFT.
 
 ## Features
+
 
 ### interface for 3D r2c FFT
 
