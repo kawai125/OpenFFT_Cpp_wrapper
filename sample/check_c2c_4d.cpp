@@ -247,6 +247,26 @@ int main(int argc, char* argv[])
     }
 
     //------ copy local output buffer into 4D array data
+    fft_mngr.gather_4d_array( &(Output[0][0][0][0]) , output_buffer, 0);
+
+    for(m=0;m<N1;m++){
+        for(i=0;i<N2;i++){
+            for(j=0;j<N3;j++){
+                for(k=0;k<N4;k++){
+                    Output[m][i][j][k].r /= factor;
+                    Output[m][i][j][k].i /= factor;
+                }
+            }
+        }
+    }
+
+    if(myid == 0){
+        printf("\n");
+        printf(" --- check FFT output ( using Manager::gather_4d_array() )\n");
+        check_4d_array(N1, N2, N3, N4, &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
+    }
+
+    //------ copy local output buffer into 4D array data
     fft_mngr.allgather_4d_array( &(Output[0][0][0][0]) , output_buffer);
 
     for(m=0;m<N1;m++){
@@ -260,7 +280,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    if(!myid){
+    if(myid == 0){
         printf("\n");
         printf(" --- check FFT output ( using Manager::allgather_4d_array() )\n");
         check_4d_array(N1, N2, N3, N4, &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );

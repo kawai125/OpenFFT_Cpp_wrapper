@@ -260,21 +260,6 @@ int main(int argc, char* argv[])
                                                copy_from_buffer_with_calc);
     */
 
-
-    /* Gather results from all processes */
-
-    fft_mngr.allgather_3d_array( &(Output[0][0][0]), output_buffer );
-
-    for(i=0;i<N1;i++){
-        for(j=0;j<N2;j++){
-            for(k=0;k<N3;k++){
-                Output[i][j][k].r /= factor;
-                Output[i][j][k].i /= factor;
-            }
-        }
-    }
-
-
     /* Print global output */
 
     if(!myid){
@@ -322,8 +307,54 @@ int main(int argc, char* argv[])
     Output_ref[1][2][2].r =-0.013; Output_ref[1][2][2].i =-0.091;
     Output_ref[1][2][3].r =-0.020; Output_ref[1][2][3].i =-0.115;
 
-    check_3d_array(N1, N2, N3,
-                   &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+
+    /* Gather results from all processes */
+
+    MPI_Allreduce(Out, Output, N1*N2*N3,
+                  MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
+
+    if(myid == 0){
+        printf("\n");
+        printf(" --- check FFT output ( using copy_3d_array_from_output_buffer() & MPI_Allreduce() )\n");
+        check_3d_array(N1, N2, N3,
+                       &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+    }
+
+    fft_mngr.gather_3d_array( &(Output[0][0][0]), output_buffer, 0 );
+
+    for(i=0;i<N1;i++){
+        for(j=0;j<N2;j++){
+            for(k=0;k<N3;k++){
+                Output[i][j][k].r /= factor;
+                Output[i][j][k].i /= factor;
+            }
+        }
+    }
+
+    if(myid == 0){
+        printf("\n");
+        printf(" --- check FFT output ( using Manager::gather_3d_array() )\n");
+        check_3d_array(N1, N2, N3,
+                       &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+    }
+
+    fft_mngr.allgather_3d_array( &(Output[0][0][0]), output_buffer );
+
+    for(i=0;i<N1;i++){
+        for(j=0;j<N2;j++){
+            for(k=0;k<N3;k++){
+                Output[i][j][k].r /= factor;
+                Output[i][j][k].i /= factor;
+            }
+        }
+    }
+
+    if(myid == 0){
+        printf("\n");
+        printf(" --- check FFT output ( using Manager::allgather_3d_array() )\n");
+        check_3d_array(N1, N2, N3,
+                       &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+    }
 
     //--- inverse FFT test
     MPI_Barrier(MPI_COMM_WORLD);
