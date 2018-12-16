@@ -220,6 +220,36 @@ This library is developed in the environment shown in below.
      MPI_Allreduce( &local_sum.v, &global_sum, 1
                    MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
      ```
+     These 'apply' functions accept any type of 3D/4D array and buffer (both of input are defined as template class respectively).
+     ```c++
+     //--- perform 'apply' between user-defined class array and buffer.
+     struct ArrayClass {
+         double v;
+         int    m;
+     };
+     struct BufferClass {
+         int j, k;
+         OpenFFT::dcomplex c;
+     };
+
+     //--- something function between ArrayClass and BufferClass
+     struct ApplyFunc {
+         void operator () (ArrayClass &arr_v, const BufferClass buf_v){
+             arr_v.v =  buf_v.c.r * (double)buf_v.j
+                     +  buf_v.c.i * (double)buf_v.k;
+             arr_v.m = buf_v.j - buf_v.k;
+         }
+     };
+     ApplyFunc apply_func;
+
+     ArrayClass array_3d[N1][N2][N3];
+     std::vector<BufferClass> apply_buffer;
+
+     //--- apply your function (select as index pattern)
+     fft_mngr.apply_3d_array_with_input_buffer(  &(array_3d[0][0][0]), apply_buffer, apply_func );
+     //  or
+     fft_mngr.apply_3d_array_with_output_buffer( &(array_3d[0][0][0]), apply_buffer, apply_func );
+     ```
 
    - Display parameters for `convert_output_to_input()` (available in c2c_3D mode only).  
      ```c++
