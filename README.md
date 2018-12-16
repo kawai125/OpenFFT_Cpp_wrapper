@@ -10,6 +10,8 @@ The sample codes (inside `./sample` directory) are released under the GPLv3 or a
 
 ## How to use
 Include the `./include/openfft.hpp` in your source code, then compile and link with the `libopenfft.a` of OpenFFT.  
+It is not necessary to include `openfft.h` of OpenFFT.
+
 __This library requires compatibility of C++11 standard for C++ compiler.__
 
 This library is developed in the environment shown in below.
