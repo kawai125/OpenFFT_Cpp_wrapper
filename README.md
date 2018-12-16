@@ -18,7 +18,7 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
 
    The complex type for OpenFFT library is `OpenFFT::dcomplex` .  The members of dcomplex are shown in below.  
    ```c++
-   OpwnFFT::dcomplex complex_data;
+   OpenFFT::dcomplex complex_data;
 
    double real_part = complex_data.r;
    double imag_part = complex_data.i;
@@ -26,6 +26,13 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
 
    The management class for OpenFFT library is `OpenFFT::Manager<double>` .  
    In current version of OpenFFT, that is only implemented in 64bit float (double) version.
+
+   Data type and index type informations are available from manager class.
+   ```c++
+   using float_type   = typename OpenFFT::Manager<double>::float_type;    //  same to double
+   using complex_type = typename OpenFFT::Manager<double>::complex_type;  //  same to OpenFFT::dcomplex
+   using index_type   = typename OpenFFT::Manager<double>::IndexList;     //  same to std::array<int, 8>
+   ```
 
  - Step 1: Initialize manager.  
    ```c++
@@ -44,6 +51,7 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
    fft_mngr.init_c2c_4d(N1, N2, N3, N4,
                         offt_measure, measure_time, print_memory);
    ```
+   These grid size and transform type are shared in global manager (that is static instance in this wrapper). You can select each one configuration exclusively in same time. (re-initialize to different configuration is possible.)
 
   - Step 2: Copy the global 3D/4D array into local input buffer.  
     ```c++
@@ -80,20 +88,20 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
     fft_mngr.fft_c2c_4d_forward( input_buffer, output_buffer );
     ```
 
-  - Step 4: Gather local output buffer data into the global 3D/4D array.  
+  - Step 4: write back local output buffer data into the local 3D/4D array.  
     ```c++
-    //--- gather for r2c 3D FFT and c2c 3D FFT
-    OpenFFT::dcomplex GlobalOutput[N1][N2][N3];
-    const int tgt_proc = 0; // MPI proc id
-    fft_mngr.gather_3d_array( &( GlobalOutput[0][0][0] ), output_buffer, tgt_proc );
+    //--- write back for r2c 3D FFT
+    OpenFFT::dcomplex LocalOutput[N1][N2][N3r];   // N3r = N3/2+1
+    fft_mngr.copy_3d_array_from_output_buffer( &( GlobalOutput[0][0][0] ), output_buffer);
 
-    //--- gather for c2c 4D FFT
-    OpenFFT::dcomplex GlobalOutput[N1][N2][N3][N4];
-    const int tgt_proc = 0; // MPI proc id
-    fft_mngr.gather_4d_array( &( GlobalOutput[0][0][0][0] ), output_buffer, tgt_proc );
+    //--- write back for c2c 3D FFT
+    OpenFFT::dcomplex LocalOutput[N1][N2][N3];
+    fft_mngr.copy_3d_array_from_output_buffer( &( GlobalOutput[0][0][0] ), output_buffer);
+
+    //--- write back for c2c 4D FFT
+    OpenFFT::dcomplex LocalOutput[N1][N2][N3][N4];
+    fft_mngr.copy_4d_array_from_output_buffer( &( GlobalOutput[0][0][0][0] ), output_buffer);
     ```
-    Also `allgather_3d_array( global_output, output_buffer )`  
-    and `allgather_4d_array( global_output, output_buffer )` functions are available to gather and broadcast the 'GlobalOutput' array for all MPI processes.
 
    - Step 4-2: Convert output buffer into input buffer for Inverse FFT (available in c2c_3D mode only).  
      ```c++
@@ -112,7 +120,7 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
      fft_mngr.finalize();
      ```
      The OpenFFT configurations are shared in global manager object (It allows you to make many instance of OpenFFT::Manager<>).  
-     It is recommended that you call the 'finalize' function at once in 'finalize' part of your program.
+     It is recommended that you call the 'finalize' function at once in finalization part of your program.
 
 ## Other APIs
 
@@ -133,6 +141,28 @@ __This library requires compatibility of C++11 standard for C++ compiler.__
      int                NumGrid_Out = fft_mngr.get_n_grid_out( tgt_proc );
      std::array<int, 8> Index_In    = fft_mngr.get_index_in(   tgt_proc );
      std::array<int, 8> Index_Out   = fft_mngr.get_index_out(  tgt_proc );
+     ```
+
+   - Gather functions are available to build global 3D/4D array from local output buffer.  
+     ```c++
+     //--- gather for r2c 3D FFT and c2c 3D FFT
+     OpenFFT::dcomplex GlobalOutput[N1][N2][N3];
+     const int tgt_proc = 0; // MPI proc id
+     fft_mngr.gather_3d_array( &( GlobalOutput[0][0][0] ), output_buffer, tgt_proc );
+
+     //--- gather for c2c 4D FFT
+     OpenFFT::dcomplex GlobalOutput[N1][N2][N3][N4];
+     const int tgt_proc = 0; // MPI proc id
+     fft_mngr.gather_4d_array( &( GlobalOutput[0][0][0][0] ), output_buffer, tgt_proc );
+
+
+     //--- allgather for r2c 3D FFT and c2c 3D FFT
+     OpenFFT::dcomplex GlobalOutput[N1][N2][N3];
+     fft_mngr.allgather_3d_array( &( GlobalOutput[0][0][0] ), output_buffer );
+
+     //--- allgather for c2c 4D FFT
+     OpenFFT::dcomplex GlobalOutput[N1][N2][N3][N4];
+     fft_mngr.allgather_4d_array( &( GlobalOutput[0][0][0][0] ), output_buffer );
      ```
 
    - Apply your function between global 3D/4D array and local input/output buffer.  
