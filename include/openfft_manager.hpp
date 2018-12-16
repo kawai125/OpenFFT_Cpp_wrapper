@@ -259,7 +259,7 @@ namespace OpenFFT {
                                                          std::vector<T_buf, Alloc_buf> &buffer,
                                                          ApplyFunc                      func,
                                                    const int                            i_proc) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_in());
+            this->_check_buffer_length(buffer, this->get_n_grid_in(i_proc));
             return this->apply_3d_array_with_input_buffer(array_3d, buffer.data(), func, i_proc);
         }
         template <class T_3d ,
@@ -316,7 +316,7 @@ namespace OpenFFT {
                                                          std::vector<T_buf, Alloc_buf> &buffer,
                                                          ApplyFunc                      func,
                                                    const int                            i_proc   ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_in());
+            this->_check_buffer_length(buffer, this->get_n_grid_in(i_proc));
             return this->apply_4d_array_with_input_buffer(array_4d, buffer.data(), func, i_proc);
         }
         template <class T_4d ,
@@ -373,7 +373,7 @@ namespace OpenFFT {
                                                           std::vector<T_buf, Alloc_buf> &buffer,
                                                           ApplyFunc                      func,
                                                     const int                            i_proc   ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_out());
+            this->_check_buffer_length(buffer, this->get_n_grid_out(i_proc));
             return this->apply_3d_array_with_output_buffer(array_3d, buffer.data(), func, i_proc);
         }
         template <class T_3d ,
@@ -430,7 +430,7 @@ namespace OpenFFT {
                                                           std::vector<T_buf, Alloc_buf> &buffer,
                                                           ApplyFunc                      func,
                                                     const int                            i_proc   ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_out());
+            this->_check_buffer_length(buffer, this->get_n_grid_out(i_proc));
             return this->apply_4d_array_with_output_buffer(array_4d, buffer.data(), func, i_proc);
         }
         template <class T_4d ,
