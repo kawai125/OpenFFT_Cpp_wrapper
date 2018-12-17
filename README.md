@@ -10,14 +10,14 @@ The sample codes (inside `./sample` directory) are released under the GPLv3 or a
 
 ## How to use
 Include the `./include/openfft.hpp` in your source code, then compile and link with the `libopenfft.a` of OpenFFT.  
-It is not necessary to include `openfft.h` of OpenFFT.
+__Do not include__ the `openfft.h` of OpenFFT.
 
-__This library requires compatibility of C++11 standard for C++ compiler.__
+__This library uses C++11 standard.__
 
 This library is developed in the environment shown in below.
- - GCC 6.5
- - OpenMPI 2.1.5
- - FFTW 3.3.8
+ - GCC 6.4
+ - OpenMPI 2.1.2
+ - FFTW 3.3.7
  - OpenFFT 1.2
 
 ## Calling wrapper function from your C++ program
