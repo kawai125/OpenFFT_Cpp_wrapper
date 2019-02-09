@@ -11,6 +11,8 @@
 #include <math.h>
 #include <time.h>
 
+#include "color_printer.hpp"
+
 #include "openfft.hpp"
 
 #define RANGE 4.5
@@ -35,8 +37,8 @@ void check_4d_array(const int n1, const int n2, const int n3, const int n4,
                     const auto ref  = ref_arr[pos];
                     if( std::abs(elem.r - ref.r) > 0.001 ||
                         std::abs(elem.i - ref.i) > 0.001   ){
-
-                        printf("ERROR array[%d,%d,%d,%d] data=(% 3.3f,% 3.3f), ref=(% 3.3f,% 3.3f)\n",
+                        print_yellow("ERROR");
+                        printf(" array[%d,%d,%d,%d] data=(% 3.3f,% 3.3f), ref=(% 3.3f,% 3.3f)\n",
                                 iw, iz, iy, ix, elem.r, elem.i, ref.r, ref.i);
                         ++fail_count;
                     }
@@ -45,9 +47,11 @@ void check_4d_array(const int n1, const int n2, const int n3, const int n4,
         }
     }
     if(fail_count == 0){
-        printf("   Check done. All elements are correct.\n");
+        print_green("   Check done.");
+        printf(     " All elements are correct.\n");
     } else {
-        printf("   Check done. Some elements are incorrect. failed = %d/%d points.\n",
+        print_red(  "   Check failure.");
+        printf(     " Some elements are incorrect. failed = %d/%d points.\n",
                fail_count, n1*n2*n3*n4);
     }
 }
@@ -242,7 +246,8 @@ int main(int argc, char* argv[])
 
     if(!myid){
         printf("\n");
-        printf(" --- check FFT output ( using copy_4d_array_from_output_buffer() & MPI_Allreduce() )\n");
+        print_green(" --- check FFT output");
+        printf(" ( using copy_4d_array_from_output_buffer() & MPI_Allreduce() )\n");
         check_4d_array(N1, N2, N3, N4, &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
     }
 
@@ -262,7 +267,8 @@ int main(int argc, char* argv[])
 
     if(myid == 0){
         printf("\n");
-        printf(" --- check FFT output ( using Manager::gather_4d_array() )\n");
+        print_green(" --- check FFT output");
+        printf(" ( using Manager::gather_4d_array() )\n");
         check_4d_array(N1, N2, N3, N4, &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
     }
 
@@ -282,7 +288,8 @@ int main(int argc, char* argv[])
 
     if(myid == 0){
         printf("\n");
-        printf(" --- check FFT output ( using Manager::allgather_4d_array() )\n");
+        print_green(" --- check FFT output");
+        printf(" ( using Manager::allgather_4d_array() )\n");
         check_4d_array(N1, N2, N3, N4, &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
     }
 

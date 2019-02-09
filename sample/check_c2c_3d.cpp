@@ -11,6 +11,8 @@
 #include <math.h>
 #include <time.h>
 
+#include "color_printer.hpp"
+
 #include "openfft.hpp"
 
 
@@ -29,7 +31,8 @@ void check_3d_array(const int n1, const int n2, const int n3,
                 if( std::abs(elem.r - ref.r) > 0.001 ||
                     std::abs(elem.i - ref.i) > 0.001   ){
 
-                    printf("ERROR array[%d,%d,%d] data=(% 3.3f,% 3.3f), ref=(% 3.3f,% 3.3f)\n",
+                    print_yellow("ERROR");
+                    printf(" array[%d,%d,%d] data=(% 3.3f,% 3.3f), ref=(% 3.3f,% 3.3f)\n",
                     iz, iy, ix, elem.r, elem.i, ref.r, ref.i);
                     check_flag = false;
                 }
@@ -37,9 +40,11 @@ void check_3d_array(const int n1, const int n2, const int n3,
         }
     }
     if(check_flag){
-        printf("   Check done. All elements are correct.\n");
+        print_green("   Check done.");
+        printf(     " All elements are correct.\n");
     } else {
-        printf("   Check done. Some elements are incorrect.\n");
+        print_red(  "   Check faulure.");
+        printf(     " Some elements are incorrect.\n");
     }
 }
 template <class T>
@@ -56,7 +61,8 @@ void check_buffer(const int  n_grid,
         const auto ref  = buf_ref[ii];
         if( std::abs(elem.r - ref.r) > 0.001 ||
             std::abs(elem.i - ref.i) > 0.001   ){
-            oss << "  ERROR in buffer[" << ii << "]: data=("
+            oss_yellow(oss, "  ERROR");
+            oss << " in buffer[" << ii << "]: data=("
                 << std::setprecision(3) << elem.r << ","
                 << std::setprecision(3) << elem.i << "), ref=("
                 << std::setprecision(3) << ref.r  << ","
@@ -65,9 +71,11 @@ void check_buffer(const int  n_grid,
         }
     }
     if( ! check_flag ){
-        oss << "   Check done. Some elements are incorrect at proc=" << my_rank << "\n";
+        oss_red(oss, "   Check failure.");
+        oss << " Some elements are incorrect at proc=" << my_rank << "\n";
     } else {
-        oss << "   Check done. All elements are correct at proc=" << my_rank << "\n";
+        oss_green(oss, "   Check done.");
+        oss << " All elements are correct at proc=" << my_rank << "\n";
     }
     std::cout << oss.str() << std::flush;
 }
@@ -203,8 +211,8 @@ int main(int argc, char* argv[])
 
     /* Get local output */
 
-    MPI_Barrier(MPI_COMM_WORLD);
     for(int i_proc=0; i_proc<numprocs; ++i_proc){
+        MPI_Barrier(MPI_COMM_WORLD);
         if(i_proc == myid){
             printf("myid=%4d: Output in the CBA(ZYX) order with %d grid points ",
                      myid,My_NumGrid_Out);
@@ -245,7 +253,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    /* another copy method: using functor and "apply" API
+    /* another copy method: using functor with "apply" API
     struct CopyFromBufferWithCalc{
         double n_inv_sqrt;
         void operator () (OpenFFT::dcomplex &arr_v, const OpenFFT::dcomplex &buf_v){
@@ -314,8 +322,9 @@ int main(int argc, char* argv[])
                   MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
 
     if(myid == 0){
-        printf("\n");
-        printf(" --- check FFT output ( using copy_3d_array_from_output_buffer() & MPI_Allreduce() )\n");
+        printf(     "\n");
+        print_green(" --- check FFT output");
+        printf(     " ( using copy_3d_array_from_output_buffer() & MPI_Allreduce() )\n");
         check_3d_array(N1, N2, N3,
                        &(Output[0][0][0]), &(Output_ref[0][0][0]) );
     }
@@ -332,8 +341,9 @@ int main(int argc, char* argv[])
     }
 
     if(myid == 0){
-        printf("\n");
-        printf(" --- check FFT output ( using Manager::gather_3d_array() )\n");
+        printf(     "\n");
+        print_green(" --- check FFT output");
+        printf(     " ( using Manager::gather_3d_array() )\n");
         check_3d_array(N1, N2, N3,
                        &(Output[0][0][0]), &(Output_ref[0][0][0]) );
     }
@@ -350,8 +360,9 @@ int main(int argc, char* argv[])
     }
 
     if(myid == 0){
-        printf("\n");
-        printf(" --- check FFT output ( using Manager::allgather_3d_array() )\n");
+        printf(     "\n");
+        print_green(" --- check FFT output");
+        printf(     " ( using Manager::allgather_3d_array() )\n");
         check_3d_array(N1, N2, N3,
                        &(Output[0][0][0]), &(Output_ref[0][0][0]) );
     }
@@ -397,14 +408,17 @@ int main(int argc, char* argv[])
         if( std::abs(sum_v.r - sum_v_ref.r) > 0.0001 ||
             std::abs(sum_v.i - sum_v_ref.i) > 0.0001   ){
             check_flag = false;
-            printf("  ERROR: reduced sum_v = (% 6.5f,% 6.5f), ref = (% 6.5f,% 6.5f)\n",
+            print_red("  ERROR:");
+            printf(" reduced sum_v = (% 6.5f,% 6.5f), ref = (% 6.5f,% 6.5f)\n",
                    sum_v.r, sum_v.i, sum_v_ref.r, sum_v_ref.i);
         }
 
         if( ! check_flag ){
-            printf("   Check done. Some elements are incorrect.\n");
+            print_red(  "   Check failure.");
+            printf(     " Some elements are incorrect.\n");
         } else {
-            printf("   Check done. All elements are correct.\n");
+            print_green("   Check done.");
+            printf(     " All elements are correct.\n");
         }
     }
 
@@ -436,7 +450,10 @@ int main(int argc, char* argv[])
     if(myid == 0) printf("\n");
     for(int i_proc=0; i_proc<numprocs; ++i_proc){
         if(i_proc == myid){
-            printf(" -- check converted Inverse FFT input buffer at proc=%d\n", myid);
+            std::ostringstream oss;
+            oss_green(oss, " -- check converted Inverse FFT input buffer");
+            oss << " at proc=" << myid << "\n";
+            printf(oss.str().c_str());
 
             check_buffer(My_NumGrid_In,
                          input_buffer.data(),
@@ -473,8 +490,11 @@ int main(int argc, char* argv[])
     //--- check Inverse FFT result
     MPI_Barrier(MPI_COMM_WORLD);
     if(myid == 0){
-        printf("\n");
-        printf(" -- check inverse FFT result at proc=%d\n", myid);
+        std::ostringstream oss;
+        oss << "\n";
+        oss_green(oss, " -- check inverse FFT result");
+        oss << " at proc=" << myid << "\n";
+        printf(oss.str().c_str());
 
         check_3d_array(N1, N2, N3,
                        &(IFFT_Output[0][0][0]), &(Input[0][0][0]) );

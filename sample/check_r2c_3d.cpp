@@ -11,6 +11,8 @@
 #include <math.h>
 #include <time.h>
 
+#include "color_printer.hpp"
+
 #include "openfft.hpp"
 
 int main(int argc, char* argv[])
@@ -223,16 +225,20 @@ int main(int argc, char* argv[])
 	  if(fabs(value.r - ref.r)>0.001 ||
 	     fabs(value.i - ref.i)>0.001){
 	    l = 1;
-	    printf("ERROR Output[%d,%d,%d]  value=(% 3.3f,% 3.3f), ref=(% 3.3f,% 3.3f)\n",
+        print_yellow("ERROR");
+	    printf(" Output[%d,%d,%d]  value=(% 3.3f,% 3.3f), ref=(% 3.3f,% 3.3f)\n",
 		       i,j,k, value.r, value.i, ref.r, ref.i);
 	  }
 	}
       }
     }
-    if (l==0)
-      printf("Check done. All output elements are correct.\n");
-    else
-      printf("Check done. Some output elements are incorrect.\n");
+    if (l==0){
+      print_green("Check done.");
+      printf(" All output elements are correct.\n");
+    } else {
+      print_red("CHeck failure.");
+      printf(" Some output elements are incorrect.\n");
+    }
   }
 
   /* Finalize OpenFFT */

@@ -89,6 +89,42 @@ namespace OpenFFT {
             }
         };
 
+        template <class Tarr>
+        struct Apply3DInterface {
+            Tarr* arr_ptr;
+            GenIndex3D gen_index;
+            Tarr& operator () (const int iz ,const int iy, const int ix, const int ii){
+                return arr_ptr[ gen_index(iz, iy, ix) ];
+            }
+        };
+        template <class Tarr>
+        struct Apply4DInterface {
+            Tarr* arr_ptr;
+            GenIndex4D gen_index;
+            Tarr& operator () (const int iw, const int iz ,const int iy, const int ix, const int ii){
+                return arr_ptr[ gen_index(iw, iz, iy, ix) ];
+            }
+        };
+        struct GetIndex3DInterface {
+            std::array<int,3>* arr_ptr;
+            GenIndex3D gen_index;
+            std::array<int,3>& operator () (const int iz ,const int iy, const int ix, const int ii){
+                return arr_ptr[ii] = std::array<int,3>{iz, iy, ix};
+            }
+        };
+        struct GetIndex4DInterface {
+            std::array<int,4>* arr_ptr;
+            GenIndex4D gen_index;
+            std::array<int,4>& operator () (const int iw, const int iz ,const int iy, const int ix, const int ii){
+                return arr_ptr[ii] = std::array<int,4>{iw, iz, iy, ix};
+            }
+        };
+
+        struct DoNothing {
+            template <class Tarr, class Tbuf>
+            void operator () (const Tarr& v_arr, const Tbuf &v_buf) { return; }
+        };
+
         /*
         *  @brief global manager for OpenFFT functions
         */
@@ -353,6 +389,7 @@ namespace OpenFFT {
                 return this->_apply_3d_array_with_input_buffer_impl(array_3d, buffer,
                                                                     this->get_n_grid_in(),
                                                                     this->get_index_in(),
+                                                                    Apply3DInterface<T_3d>{},
                                                                     func );
             }
             template <class T_3d ,
@@ -365,29 +402,32 @@ namespace OpenFFT {
                 return this->_apply_3d_array_with_input_buffer_impl(array_3d, buffer,
                                                                     this->get_n_grid_in(i_proc),
                                                                     this->get_index_in( i_proc),
+                                                                    Apply3DInterface<T_3d>{},
                                                                     func );
             }
-            template <class T_3d ,
+            template <class T_4d ,
                       class T_buf,
                       class ApplyFunc >
-            ApplyFunc apply_4d_array_with_input_buffer(T_3d      *array_4d,
+            ApplyFunc apply_4d_array_with_input_buffer(T_4d      *array_4d,
                                                        T_buf     *buffer,
                                                        ApplyFunc  func     ) const {
                 return this->_apply_4d_array_with_input_buffer_impl(array_4d, buffer,
                                                                     this->get_n_grid_in(),
                                                                     this->get_index_in(),
+                                                                    Apply4DInterface<T_4d>{},
                                                                     func );
             }
-            template <class T_3d ,
+            template <class T_4d ,
                       class T_buf,
                       class ApplyFunc >
-            ApplyFunc apply_4d_array_with_input_buffer(      T_3d      *array_4d,
+            ApplyFunc apply_4d_array_with_input_buffer(      T_4d      *array_4d,
                                                              T_buf     *buffer,
                                                              ApplyFunc  func,
                                                        const int        i_proc   ) const {
                 return this->_apply_4d_array_with_input_buffer_impl(array_4d, buffer,
                                                                     this->get_n_grid_in(i_proc),
                                                                     this->get_index_in( i_proc),
+                                                                    Apply4DInterface<T_4d>{},
                                                                     func );
             }
 
@@ -403,6 +443,7 @@ namespace OpenFFT {
                 return this->_apply_3d_array_with_output_buffer_impl(array_3d, buffer,
                                                                      this->get_n_grid_out(),
                                                                      this->get_index_out(),
+                                                                     Apply3DInterface<T_3d>{},
                                                                      func );
             }
             template <class T_3d ,
@@ -415,29 +456,32 @@ namespace OpenFFT {
                 return this->_apply_3d_array_with_output_buffer_impl(array_3d, buffer,
                                                                      this->get_n_grid_out(i_proc),
                                                                      this->get_index_out( i_proc),
+                                                                     Apply3DInterface<T_3d>{},
                                                                      func );
             }
-            template <class T_3d ,
+            template <class T_4d ,
                       class T_buf,
                       class ApplyFunc >
-            ApplyFunc apply_4d_array_with_output_buffer(T_3d      *array_4d,
+            ApplyFunc apply_4d_array_with_output_buffer(T_4d      *array_4d,
                                                         T_buf     *buffer,
                                                         ApplyFunc  func     ) const {
                 return this->_apply_4d_array_with_output_buffer_impl(array_4d, buffer,
                                                                      this->get_n_grid_out(),
                                                                      this->get_index_out(),
+                                                                     Apply4DInterface<T_4d>{},
                                                                      func );
             }
-            template <class T_3d ,
+            template <class T_4d ,
                       class T_buf,
                       class ApplyFunc >
-            ApplyFunc apply_4d_array_with_output_buffer(      T_3d      *array_4d,
+            ApplyFunc apply_4d_array_with_output_buffer(      T_4d      *array_4d,
                                                               T_buf     *buffer,
                                                               ApplyFunc  func,
                                                         const int        i_proc   ) const {
                 return this->_apply_4d_array_with_output_buffer_impl(array_4d, buffer,
                                                                      this->get_n_grid_out(i_proc),
                                                                      this->get_index_out( i_proc),
+                                                                     Apply4DInterface<T_4d>{},
                                                                      func );
             }
 
@@ -540,6 +584,7 @@ namespace OpenFFT {
                                                                   recv_buf.data(),
                                                                   n_grid_out,
                                                                   index_out,
+                                                                  Apply3DInterface<complex_t>{},
                                                                   copy_from_buffer);
                 }
             }
@@ -570,6 +615,7 @@ namespace OpenFFT {
                                                                   recv_buf.data(),
                                                                   n_grid_out,
                                                                   index_out,
+                                                                  Apply3DInterface<complex_t>{},
                                                                   copy_from_buffer);
                 }
             }
@@ -603,6 +649,7 @@ namespace OpenFFT {
                                                                   recv_buf.data(),
                                                                   n_grid_out,
                                                                   index_out,
+                                                                  Apply4DInterface<complex_t>{},
                                                                   copy_from_buffer);
                 }
             }
@@ -633,6 +680,7 @@ namespace OpenFFT {
                                                                   recv_buf.data(),
                                                                   n_grid_out,
                                                                   index_out,
+                                                                  Apply4DInterface<complex_t>{},
                                                                   copy_from_buffer);
                 }
             }
@@ -700,16 +748,25 @@ namespace OpenFFT {
                 }
             }
 
-            template <class T_arr,
-                      class T_buf,
-                      class ApplyFunc >
-            ApplyFunc _apply_3d_array_with_input_buffer_impl(      T_arr     *array_3d,
-                                                                   T_buf     *buffer,
-                                                             const int        n_grid_in,
-                                                             const IndexList &index_in,
-                                                                   ApplyFunc  func      ) const {
+            template <class Tptr>
+            void _check_nullptr(const Tptr *ptr) const {
+                if(ptr == nullptr){
+                    throw std::invalid_argument("the nullptr was passed.");
+                }
+            }
 
-                if(n_grid_in <= 0) return func;
+            template < class T_arr,
+                       class T_buf,
+                       class ApplyInterface,
+                       class ApplyFunc      >
+            ApplyFunc _apply_3d_array_with_input_buffer_impl(      T_arr          *array_3d,
+                                                                   T_buf          *buffer,
+                                                             const int             n_grid_in,
+                                                             const IndexList      &index_in,
+                                                                   ApplyInterface  apply_interface,
+                                                                   ApplyFunc       apply_func      ) const {
+
+                if(n_grid_in <= 0) return apply_func;
 
                 if(this->grid_type != FFT_GridType::r2c_3D &&
                    this->grid_type != FFT_GridType::c2c_3D   ){
@@ -719,15 +776,18 @@ namespace OpenFFT {
                     throw std::logic_error(oss.str());
                 }
 
-                GenIndex3D get_3d_index;
-                get_3d_index.set_grid(this->n_z, this->n_y, this->n_x);
+                this->_check_nullptr(array_3d);
+                this->_check_nullptr(buffer);
+
+                apply_interface.arr_ptr = array_3d;
+                apply_interface.gen_index.set_grid(this->n_z, this->n_y, this->n_x);
 
                 int ii = 0;
                 if(index_in[0] == index_in[3]){
                     const int iz = index_in[0];
                     for(int iy=index_in[1]; iy<=index_in[4]; ++iy){
                         for(int ix=index_in[2]; ix<=index_in[5]; ++ix){
-                            func( array_3d[ get_3d_index(iz, iy, ix) ], buffer[ii] );
+                            apply_func( apply_interface(iz, iy, ix, ii), buffer[ii] );
                             ++ii;
                         }
                     }
@@ -736,21 +796,21 @@ namespace OpenFFT {
                         if(iz == index_in[0]){
                             for(int iy=index_in[1]; iy<this->n_y; ++iy){
                                 for(int ix=index_in[2]; ix<=index_in[5]; ++ix){
-                                    func( array_3d[ get_3d_index(iz, iy, ix) ], buffer[ii] );
+                                    apply_func( apply_interface(iz, iy, ix, ii), buffer[ii] );
                                     ++ii;
                                 }
                             }
                         } else if(index_in[0] < iz && iz < index_in[3]){
                             for(int iy=0; iy<this->n_y; ++iy){
                                 for(int ix=index_in[2]; ix<=index_in[5]; ++ix){
-                                    func( array_3d[ get_3d_index(iz, iy, ix) ], buffer[ii] );
+                                    apply_func( apply_interface(iz, iy, ix, ii), buffer[ii] );
                                     ++ii;
                                 }
                             }
                         } else if(iz == index_in[3]){
                             for(int iy=0; iy<=index_in[4]; ++iy){
                                 for(int ix=index_in[2]; ix<=index_in[5]; ++ix){
-                                    func( array_3d[ get_3d_index(iz, iy, ix) ], buffer[ii] );
+                                    apply_func( apply_interface(iz, iy, ix, ii), buffer[ii] );
                                     ++ii;
                                 }
                             }
@@ -768,18 +828,20 @@ namespace OpenFFT {
                     }
                 #endif
 
-                return func;
+                return apply_func;
             }
-            template <class T_arr,
-                      class T_buf,
-                      class ApplyFunc >
-            ApplyFunc _apply_3d_array_with_output_buffer_impl(      T_arr     *array_3d,
-                                                                    T_buf     *buffer,
-                                                              const int        n_grid_out,
-                                                              const IndexList &index_out,
-                                                                    ApplyFunc  func       ) const {
+            template < class T_arr,
+                       class T_buf,
+                       class ApplyInterface,
+                       class ApplyFunc      >
+            ApplyFunc _apply_3d_array_with_output_buffer_impl(      T_arr          *array_3d,
+                                                                    T_buf          *buffer,
+                                                              const int             n_grid_out,
+                                                              const IndexList      &index_out,
+                                                                    ApplyInterface  apply_interface,
+                                                                    ApplyFunc       apply_func      ) const {
 
-                if(n_grid_out <= 0) return func;
+                if(n_grid_out <= 0) return apply_func;
 
                 if(this->grid_type != FFT_GridType::r2c_3D &&
                    this->grid_type != FFT_GridType::c2c_3D   ){
@@ -789,10 +851,14 @@ namespace OpenFFT {
                     throw std::logic_error(oss.str());
                 }
 
-                GenIndex3D get_3d_index;
-                get_3d_index.set_grid(this->n_z, this->n_y, this->n_x);
+                this->_check_nullptr(array_3d);
+                this->_check_nullptr(buffer);
+
+                apply_interface.arr_ptr = array_3d;
                 if(this->grid_type == FFT_GridType::r2c_3D){
-                    get_3d_index.nx = this->n_x/2+1;
+                    apply_interface.gen_index.set_grid(this->n_z, this->n_y, this->n_x/2+1);
+                } else {
+                    apply_interface.gen_index.set_grid(this->n_z, this->n_y, this->n_x);
                 }
 
                 int ii = 0;
@@ -800,7 +866,7 @@ namespace OpenFFT {
                     const int ix = index_out[0];
                     for(int iy=index_out[1]; iy<=index_out[4]; ++iy){
                         for(int iz=index_out[2]; iz<=index_out[5]; ++iz){
-                            func( array_3d[ get_3d_index(iz, iy, ix) ], buffer[ii] );
+                            apply_func( apply_interface(iz, iy, ix, ii), buffer[ii] );
                             ++ii;
                         }
                     }
@@ -809,21 +875,21 @@ namespace OpenFFT {
                         if(ix == index_out[0]){
                             for(int iy=index_out[1]; iy<this->n_y; ++iy){
                                 for(int iz=index_out[2]; iz<=index_out[5]; ++iz){
-                                    func( array_3d[ get_3d_index(iz, iy, ix) ], buffer[ii] );
+                                    apply_func( apply_interface(iz, iy, ix, ii), buffer[ii] );
                                     ++ii;
                                 }
                             }
                         } else if(index_out[0] < ix && ix < index_out[3]){
                             for(int iy=0; iy<this->n_y; ++iy){
                                 for(int iz=index_out[2]; iz<=index_out[5]; ++iz){
-                                    func( array_3d[ get_3d_index(iz, iy, ix) ], buffer[ii] );
+                                    apply_func( apply_interface(iz, iy, ix, ii), buffer[ii] );
                                     ++ii;
                                 }
                             }
                         } else if (ix == index_out[3]){
                             for(int iy=0; iy<=index_out[4]; ++iy){
                                 for(int iz=index_out[2]; iz<=index_out[5]; ++iz){
-                                    func( array_3d[ get_3d_index(iz, iy, ix) ], buffer[ii] );
+                                    apply_func( apply_interface(iz, iy, ix, ii), buffer[ii] );
                                     ++ii;
                                 }
                             }
@@ -841,19 +907,21 @@ namespace OpenFFT {
                     }
                 #endif
 
-                return func;
+                return apply_func;
             }
 
-            template <class T_arr,
-                      class T_buf,
-                      class ApplyFunc >
-            ApplyFunc _apply_4d_array_with_input_buffer_impl(      T_arr     *array_4d,
-                                                                   T_buf     *buffer,
-                                                             const int        n_grid_in,
-                                                             const IndexList &index_in,
-                                                                   ApplyFunc  func      ) const {
+            template < class T_arr,
+                       class T_buf,
+                       class ApplyInterface,
+                       class ApplyFunc      >
+            ApplyFunc _apply_4d_array_with_input_buffer_impl(      T_arr          *array_4d,
+                                                                   T_buf          *buffer,
+                                                             const int             n_grid_in,
+                                                             const IndexList      &index_in,
+                                                                   ApplyInterface  apply_interface,
+                                                                   ApplyFunc       apply_func      ) const {
 
-                if(n_grid_in <= 0) return func;
+                if(n_grid_in <= 0) return apply_func;
 
                 if(this->grid_type != FFT_GridType::c2c_4D ){
                        std::ostringstream oss;
@@ -862,8 +930,11 @@ namespace OpenFFT {
                     throw std::logic_error(oss.str());
                 }
 
-                GenIndex4D get_4d_index;
-                get_4d_index.set_grid(this->n_w, this->n_z, this->n_y, this->n_x);
+                this->_check_nullptr(array_4d);
+                this->_check_nullptr(buffer);
+
+                apply_interface.arr_ptr = array_4d;
+                apply_interface.gen_index.set_grid(this->n_w, this->n_z, this->n_y, this->n_x);
 
                 int ii = 0;
                 if(index_in[0] == index_in[4]){
@@ -872,7 +943,7 @@ namespace OpenFFT {
                         const int iz = index_in[1];
                         for(int iy=index_in[2]; iy<=index_in[6]; iy++){
                             for(int ix=index_in[3]; ix<=index_in[7]; ix++){
-                                func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                 ++ii;
                             }
                         }
@@ -881,7 +952,7 @@ namespace OpenFFT {
                             if(iz == index_in[1]){
                                 for(int iy=index_in[2]; iy<this->n_y; ++iy){
                                     for(int ix=index_in[3]; ix<=index_in[7]; ++ix){
-                                        func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                        apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                         ++ii;
                                     }
                                 }
@@ -889,7 +960,7 @@ namespace OpenFFT {
                             else if(index_in[1] < iz && iz < index_in[5]){
                                 for(int iy=0; iy<this->n_y; ++iy){
                                     for(int ix=index_in[3]; ix<=index_in[7]; ++ix){
-                                        func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                        apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                         ++ii;
                                     }
                                 }
@@ -897,7 +968,7 @@ namespace OpenFFT {
                             else if(iz == index_in[5]){
                                 for(int iy=0; iy<=index_in[6]; ++iy){
                                     for(int ix=index_in[3]; ix<=index_in[7]; ++ix){
-                                        func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                        apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                         ++ii;
                                     }
                                 }
@@ -911,14 +982,14 @@ namespace OpenFFT {
                                 if(iz == index_in[1]){
                                     for(int iy=index_in[2]; iy<this->n_y; ++iy){
                                         for(int ix=index_in[3]; ix<=index_in[7]; ++ix){
-                                            func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                            apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                             ++ii;
                                         }
                                     }
                                 } else {
                                     for(int iy=0; iy<this->n_y; ++iy){
                                         for(int ix=index_in[3]; ix<=index_in[7]; ++ix){
-                                            func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                            apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                             ++ii;
                                         }
                                     }
@@ -928,7 +999,7 @@ namespace OpenFFT {
                             for(int iz=0; iz<this->n_z; ++iz){
                                 for(int iy=0; iy<this->n_y; ++iy){
                                     for(int ix=index_in[3]; ix<=index_in[7]; ++ix){
-                                        func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                        apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                         ++ii;
                                     }
                                 }
@@ -938,14 +1009,14 @@ namespace OpenFFT {
                                 if(iz == index_in[5]){
                                     for(int iy=0; iy<=index_in[6]; ++iy){
                                         for(int ix=index_in[3]; ix<=index_in[7]; ++ix){
-                                            func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                            apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                             ++ii;
                                         }
                                     }
                                 } else {
                                     for(int iy=0; iy<this->n_y; ++iy){
                                         for(int ix=index_in[3]; ix<=index_in[7]; ++ix){
-                                            func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                            apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                             ++ii;
                                         }
                                     }
@@ -965,18 +1036,20 @@ namespace OpenFFT {
                     }
                 #endif
 
-                return func;
+                return apply_func;
             }
-            template <class T_arr,
-                      class T_buf,
-                      class ApplyFunc >
-            ApplyFunc _apply_4d_array_with_output_buffer_impl(      T_arr     *array_4d,
-                                                                    T_buf     *buffer,
-                                                              const int        n_grid_out,
-                                                              const IndexList &index_out,
-                                                                    ApplyFunc  func       ) const {
+            template < class T_arr,
+                       class T_buf,
+                       class ApplyInterface,
+                       class ApplyFunc      >
+            ApplyFunc _apply_4d_array_with_output_buffer_impl(      T_arr          *array_4d,
+                                                                    T_buf          *buffer,
+                                                              const int             n_grid_out,
+                                                              const IndexList      &index_out,
+                                                                    ApplyInterface  apply_interface,
+                                                                    ApplyFunc       apply_func      ) const {
 
-                if(n_grid_out <= 0) return func;
+                if(n_grid_out <= 0) return apply_func;
 
                 if(this->grid_type != FFT_GridType::c2c_4D ){
                        std::ostringstream oss;
@@ -985,8 +1058,11 @@ namespace OpenFFT {
                     throw std::logic_error(oss.str());
                 }
 
-                GenIndex4D get_4d_index;
-                get_4d_index.set_grid(this->n_w, this->n_z, this->n_y, this->n_x);
+                this->_check_nullptr(array_4d);
+                this->_check_nullptr(buffer);
+
+                apply_interface.arr_ptr = array_4d;
+                apply_interface.gen_index.set_grid(this->n_w, this->n_z, this->n_y, this->n_x);
 
                 int ii = 0;
                 if(index_out[0] == index_out[4]){
@@ -995,7 +1071,7 @@ namespace OpenFFT {
                         const int iy = index_out[1];
                         for(int iz=index_out[2]; iz<=index_out[6]; iz++){
                             for(int iw=index_out[3]; iw<=index_out[7]; iw++){
-                                func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                 ++ii;
                             }
                         }
@@ -1004,7 +1080,7 @@ namespace OpenFFT {
                             if(iy == index_out[1]){
                                 for(int iz=index_out[2]; iz<this->n_z; ++iz){
                                     for(int iw=index_out[3]; iw<=index_out[7]; ++iw){
-                                        func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                        apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                         ++ii;
                                     }
                                 }
@@ -1012,7 +1088,7 @@ namespace OpenFFT {
                             else if(index_out[1] < iy && iy < index_out[5]){
                                 for(int iz=0; iz<this->n_z; ++iz){
                                     for(int iw=index_out[3]; iw<=index_out[7]; ++iw){
-                                        func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                        apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                         ++ii;
                                     }
                                 }
@@ -1020,7 +1096,7 @@ namespace OpenFFT {
                             else if(iy == index_out[5]){
                                 for(int iz=0; iz<=index_out[6]; ++iz){
                                     for(int iw=index_out[3]; iw<=index_out[7]; ++iw){
-                                        func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                        apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                         ++ii;
                                     }
                                 }
@@ -1034,14 +1110,14 @@ namespace OpenFFT {
                                 if(iy == index_out[1]){
                                     for(int iz=index_out[2]; iz<this->n_z; ++iz){
                                         for(int iw=index_out[3]; iw<=index_out[7]; ++iw){
-                                            func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                            apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                             ++ii;
                                         }
                                     }
                                 } else {
                                     for(int iz=0; iz<this->n_z; ++iz){
                                         for(int iw=index_out[3]; iw<=index_out[7]; ++iw){
-                                            func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                            apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                             ++ii;
                                         }
                                     }
@@ -1051,7 +1127,7 @@ namespace OpenFFT {
                             for(int iy=0; iy<this->n_y; ++iy){
                                 for(int iz=0; iz<this->n_z; ++iz){
                                     for(int iw=index_out[3]; iw<=index_out[7]; ++iw){
-                                        func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                        apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                         ++ii;
                                     }
                                 }
@@ -1061,14 +1137,14 @@ namespace OpenFFT {
                                 if(iy == index_out[5]){
                                     for(int iz=0; iz<=index_out[6]; ++iz){
                                         for(int iw=index_out[3]; iw<=index_out[7]; ++iw){
-                                            func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                            apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                             ++ii;
                                         }
                                     }
                                 } else {
                                     for(int iz=0; iz<this->n_z; ++iz){
                                         for(int iw=index_out[3]; iw<=index_out[7]; ++iw){
-                                            func( array_4d[ get_4d_index(iw, iz, iy, ix) ], buffer[ii] );
+                                            apply_func( apply_interface(iw, iz, iy, ix, ii), buffer[ii] );
                                             ++ii;
                                         }
                                     }
@@ -1088,7 +1164,7 @@ namespace OpenFFT {
                     }
                 #endif
 
-                return func;
+                return apply_func;
             }
 
             void _collect_buffer_info(){
@@ -1136,6 +1212,7 @@ namespace OpenFFT {
                                                                   this->index_array.data(),
                                                                   n_grid_out,
                                                                   index_out,
+                                                                  Apply3DInterface<IndexMark>{},
                                                                   copy_from_buffer );
                 }
 
@@ -1174,6 +1251,7 @@ namespace OpenFFT {
                                                                  this->index_array.data(),
                                                                  n_grid_in,
                                                                  index_in,
+                                                                 Apply3DInterface<IndexMark>{},
                                                                  copy_from_buffer );
 
                     if(report_matrix){
