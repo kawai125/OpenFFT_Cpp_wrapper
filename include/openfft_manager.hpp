@@ -230,8 +230,7 @@ namespace OpenFFT {
                   class T_buf >
         void copy_3d_array_into_input_buffer(const T_3d  *array_3d,
                                                    T_buf *buffer   ) const {
-            CopyIntoBuffer<T_3d, T_buf> copy_into_buffer;
-            this->apply_3d_array_with_input_buffer(array_3d, buffer, copy_into_buffer);
+            this->apply_3d_array_with_input_buffer(array_3d, buffer, CopyIntoBuffer{});
         }
         template <class T_3d ,
                   class T_buf, class Alloc_buf,
@@ -309,8 +308,7 @@ namespace OpenFFT {
                   class T_buf >
         void copy_3d_array_from_output_buffer(      T_3d  *array_3d,
                                               const T_buf *buffer   ) const {
-            CopyFromBuffer<T_3d, T_buf> copy_from_buffer;
-            this->apply_3d_array_with_output_buffer(array_3d, buffer, copy_from_buffer);
+            this->apply_3d_array_with_output_buffer(array_3d, buffer, CopyFromBuffer{});
         }
         template <class T_3d ,
                   class T_buf, class Alloc_buf,
@@ -387,8 +385,7 @@ namespace OpenFFT {
                   class T_buf >
         void copy_4d_array_into_input_buffer(const T_4d  *array_4d,
                                                    T_buf *buffer   ) const {
-            CopyIntoBuffer<T_4d, T_buf> copy_into_buffer;
-            this->apply_4d_array_with_input_buffer(array_4d, buffer, copy_into_buffer);
+            this->apply_4d_array_with_input_buffer(array_4d, buffer, CopyIntoBuffer{});
         }
         template <class T_4d ,
                   class T_buf, class Alloc_buf,
@@ -466,8 +463,7 @@ namespace OpenFFT {
                   class T_buf >
         void copy_4d_array_from_output_buffer(      T_4d  *array_4d,
                                               const T_buf *buffer   ) const {
-            CopyFromBuffer<T_4d, T_buf> copy_from_buffer;
-            this->apply_4d_array_with_output_buffer(array_4d, buffer, copy_from_buffer);
+            this->apply_4d_array_with_output_buffer(array_4d, buffer, CopyFromBuffer{});
         }
         template <class T_4d ,
                   class T_buf, class Alloc_buf,
@@ -481,9 +477,9 @@ namespace OpenFFT {
         template <class T_4d ,
                   class T_buf, class Alloc_buf,
                   class ApplyFunc >
-        ApplyFunc apply_4d_array_with_output_buffer(T_4d                                *array_4d,
+        ApplyFunc apply_4d_array_with_output_buffer(      T_4d                          *array_4d,
                                                     const std::vector<T_buf, Alloc_buf> &buffer,
-                                                    ApplyFunc                            func     ) const {
+                                                          ApplyFunc                      func     ) const {
             this->_check_buffer_length(buffer, this->get_n_grid_out());
             const T_buf* buf_ptr = buffer.data();
             return this->apply_4d_array_with_output_buffer(array_4d, buf_ptr, func);
@@ -527,6 +523,55 @@ namespace OpenFFT {
                                                           ApplyFunc  func,
                                                     const int        i_proc   ) const {
             return _impl::fp64_global_mngr.apply_4d_array_with_output_buffer(array_4d, buffer, func, i_proc);
+        }
+
+        //----------------------------------------------------------------------
+        //    index sequence generator
+        //----------------------------------------------------------------------
+        template <class Alloc_seq>
+        void gen_3d_input_index_sequence(std::vector<std::array<int, 3>, Alloc_seq> &index_seq) const {
+            index_seq.resize( this->get_n_grid_in() );
+            _impl::fp64_global_mngr.gen_3d_input_index_sequence( index_seq.data() );
+        }
+        template <class Alloc_seq>
+        void gen_3d_input_index_sequence(      std::vector<std::array<int, 3>, Alloc_seq> &index_seq,
+                                         const int                                         i_proc    ) const {
+            index_seq.resize( this->get_n_grid_in() );
+            _impl::fp64_global_mngr.gen_3d_input_index_sequence(index_seq.data(), i_proc);
+        }
+        template <class Alloc_seq>
+        void gen_3d_output_index_sequence(std::vector<std::array<int, 3>, Alloc_seq> &index_seq) const {
+            index_seq.resize( this->get_n_grid_out() );
+            _impl::fp64_global_mngr.gen_3d_output_index_sequence( index_seq.data() );
+        }
+        template <class Alloc_seq>
+        void gen_3d_output_index_sequence(      std::vector<std::array<int, 3>, Alloc_seq> &index_seq,
+                                          const int                                         i_proc    ) const {
+            index_seq.resize( this->get_n_grid_out() );
+            _impl::fp64_global_mngr.gen_3d_output_index_sequence(index_seq.data(), i_proc);
+        }
+
+        template <class Alloc_seq>
+        void gen_4d_input_index_sequence(std::vector<std::array<int, 4>, Alloc_seq> &index_seq) const {
+            index_seq.resize( this->get_n_grid_in() );
+            _impl::fp64_global_mngr.gen_4d_input_index_sequence( index_seq.data() );
+        }
+        template <class Alloc_seq>
+        void gen_4d_input_index_sequence(      std::vector<std::array<int, 4>, Alloc_seq> &index_seq,
+                                         const int                                         i_proc    ) const {
+            index_seq.resize( this->get_n_grid_in() );
+            _impl::fp64_global_mngr.gen_4d_input_index_sequence(index_seq.data(), i_proc);
+        }
+        template <class Alloc_seq>
+        void gen_4d_output_index_sequence(std::vector<std::array<int, 4>, Alloc_seq> &index_seq) const {
+            index_seq.resize( this->get_n_grid_out() );
+            _impl::fp64_global_mngr.gen_4d_output_index_sequence( index_seq.data() );
+        }
+        template <class Alloc_seq>
+        void gen_4d_output_index_sequence(      std::vector<std::array<int, 4>, Alloc_seq> &index_seq,
+                                          const int                                         i_proc    ) const {
+            index_seq.resize( this->get_n_grid_out() );
+            _impl::fp64_global_mngr.gen_4d_output_index_sequence(index_seq.data(), i_proc);
         }
 
         //----------------------------------------------------------------------

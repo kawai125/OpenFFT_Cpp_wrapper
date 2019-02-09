@@ -93,6 +93,7 @@ namespace OpenFFT {
         struct Apply3DInterface {
             Tarr* arr_ptr;
             GenIndex3D gen_index;
+
             Tarr& operator () (const int iz ,const int iy, const int ix, const int ii){
                 return arr_ptr[ gen_index(iz, iy, ix) ];
             }
@@ -101,6 +102,7 @@ namespace OpenFFT {
         struct Apply4DInterface {
             Tarr* arr_ptr;
             GenIndex4D gen_index;
+
             Tarr& operator () (const int iw, const int iz ,const int iy, const int ix, const int ii){
                 return arr_ptr[ gen_index(iw, iz, iy, ix) ];
             }
@@ -108,15 +110,21 @@ namespace OpenFFT {
         struct GetIndex3DInterface {
             std::array<int,3>* arr_ptr;
             GenIndex3D gen_index;
-            std::array<int,3>& operator () (const int iz ,const int iy, const int ix, const int ii){
-                return arr_ptr[ii] = std::array<int,3>{iz, iy, ix};
+
+            const std::array<int,3> operator () (const int iz ,const int iy, const int ix, const int ii){
+                std::array<int,3> index{iz, iy, ix};
+                arr_ptr[ii] = index;
+                return index;
             }
         };
         struct GetIndex4DInterface {
             std::array<int,4>* arr_ptr;
             GenIndex4D gen_index;
-            std::array<int,4>& operator () (const int iw, const int iz ,const int iy, const int ix, const int ii){
-                return arr_ptr[ii] = std::array<int,4>{iw, iz, iy, ix};
+
+            const std::array<int,4> operator () (const int iw, const int iz ,const int iy, const int ix, const int ii){
+                std::array<int,4> index{iw, iz, iy, ix};
+                arr_ptr[ii] = index;
+                return index;
             }
         };
 
@@ -486,6 +494,79 @@ namespace OpenFFT {
             }
 
             //----------------------------------------------------------------------
+            //    index sequence generator
+            //----------------------------------------------------------------------
+            void gen_3d_input_index_sequence(std::array<int,3> *index_seq) const {
+                const std::array<int,3>* dummy_ptr = index_seq;
+                this->_apply_3d_array_with_input_buffer_impl(index_seq, dummy_ptr,
+                                                             this->get_n_grid_in(),
+                                                             this->get_index_in(),
+                                                             GetIndex3DInterface{},
+                                                             DoNothing{} );
+            }
+            void gen_3d_input_index_sequence(      std::array<int,3> *index_seq,
+                                             const int                i_proc    ) const {
+                const std::array<int,3>* dummy_ptr = index_seq;
+                this->_apply_3d_array_with_input_buffer_impl(index_seq, dummy_ptr,
+                                                             this->get_n_grid_in(i_proc),
+                                                             this->get_index_in( i_proc),
+                                                             GetIndex3DInterface{},
+                                                             DoNothing{} );
+            }
+            void gen_3d_output_index_sequence(std::array<int,3> *index_seq) const {
+                const std::array<int,3>* dummy_ptr = index_seq;
+                this->_apply_3d_array_with_output_buffer_impl(index_seq, dummy_ptr,
+                                                              this->get_n_grid_out(),
+                                                              this->get_index_out(),
+                                                              GetIndex3DInterface{},
+                                                              DoNothing{} );
+            }
+            void gen_3d_output_index_sequence(      std::array<int,3> *index_seq,
+                                              const int                i_proc    ) const {
+                const std::array<int,3>* dummy_ptr = index_seq;
+                this->_apply_3d_array_with_output_buffer_impl(index_seq, dummy_ptr,
+                                                              this->get_n_grid_out(i_proc),
+                                                              this->get_index_out( i_proc),
+                                                              GetIndex3DInterface{},
+                                                              DoNothing{} );
+            }
+
+            void gen_4d_input_index_sequence(std::array<int,4> *index_seq) const {
+                const std::array<int,4>* dummy_ptr = index_seq;
+                this->_apply_4d_array_with_input_buffer_impl(index_seq, dummy_ptr,
+                                                             this->get_n_grid_in(),
+                                                             this->get_index_in(),
+                                                             GetIndex4DInterface{},
+                                                             DoNothing{} );
+            }
+            void gen_4d_input_index_sequence(      std::array<int,4> *index_seq,
+                                             const int                i_proc    ) const {
+                const std::array<int,4>* dummy_ptr = index_seq;
+                this->_apply_4d_array_with_input_buffer_impl(index_seq, dummy_ptr,
+                                                             this->get_n_grid_in(i_proc),
+                                                             this->get_index_in( i_proc),
+                                                             GetIndex4DInterface{},
+                                                             DoNothing{} );
+            }
+            void gen_4d_output_index_sequence(std::array<int,4> *index_seq) const {
+                const std::array<int,4>* dummy_ptr = index_seq;
+                this->_apply_4d_array_with_output_buffer_impl(index_seq, dummy_ptr,
+                                                              this->get_n_grid_out(),
+                                                              this->get_index_out(),
+                                                              GetIndex4DInterface{},
+                                                              DoNothing{} );
+            }
+            void gen_4d_output_index_sequence(      std::array<int,4> *index_seq,
+                                              const int                i_proc    ) const {
+                const std::array<int,4>* dummy_ptr = index_seq;
+                this->_apply_4d_array_with_output_buffer_impl(index_seq, dummy_ptr,
+                                                              this->get_n_grid_out(i_proc),
+                                                              this->get_index_out( i_proc),
+                                                              GetIndex4DInterface{},
+                                                              DoNothing{} );
+            }
+
+            //----------------------------------------------------------------------
             //    output_buffer to input_buffer converter
             //----------------------------------------------------------------------
             void convert_output_to_input(      complex_t *input_buf,
@@ -552,7 +633,7 @@ namespace OpenFFT {
             }
 
             //----------------------------------------------------------------------
-            //    gather inferface for global 3D-array from output_buffer
+            //    gather inferface for global 3D/4D-array from output_buffer
             //----------------------------------------------------------------------
             void gather_3d_array(      complex_t *array_3d,
                                  const complex_t *output_buf,
@@ -574,7 +655,6 @@ namespace OpenFFT {
                 if(my_rank != tgt_proc) return;
 
                 //--- build array_3d
-                CopyFromBuffer<complex_t, complex_t> copy_from_buffer;
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
                     const int   n_grid_out = this->get_n_grid_out(i_proc);
                     const auto  index_out  = this->get_index_out( i_proc);
@@ -585,7 +665,7 @@ namespace OpenFFT {
                                                                   n_grid_out,
                                                                   index_out,
                                                                   Apply3DInterface<complex_t>{},
-                                                                  copy_from_buffer);
+                                                                  CopyFromBuffer{} );
                 }
             }
             void allgather_3d_array(      complex_t *array_3d,
@@ -605,7 +685,6 @@ namespace OpenFFT {
                 _mpi::allgather(send_buf, this->mpi_recv_buf);
 
                 //--- build array_3d
-                CopyFromBuffer<complex_t, complex_t> copy_from_buffer;
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
                     const int   n_grid_out = this->get_n_grid_out(i_proc);
                     const auto  index_out  = this->get_index_out( i_proc);
@@ -616,7 +695,7 @@ namespace OpenFFT {
                                                                   n_grid_out,
                                                                   index_out,
                                                                   Apply3DInterface<complex_t>{},
-                                                                  copy_from_buffer);
+                                                                  CopyFromBuffer{} );
                 }
             }
             void gather_4d_array(      complex_t *array_4d,
@@ -639,7 +718,6 @@ namespace OpenFFT {
                 if(my_rank != tgt_proc) return;
 
                 //--- build array_4d
-                CopyFromBuffer<complex_t, complex_t> copy_from_buffer;
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
                     const int   n_grid_out = this->get_n_grid_out(i_proc);
                     const auto  index_out  = this->get_index_out( i_proc);
@@ -650,7 +728,7 @@ namespace OpenFFT {
                                                                   n_grid_out,
                                                                   index_out,
                                                                   Apply4DInterface<complex_t>{},
-                                                                  copy_from_buffer);
+                                                                  CopyFromBuffer{} );
                 }
             }
             void allgather_4d_array(      complex_t *array_4d,
@@ -670,7 +748,6 @@ namespace OpenFFT {
                 _mpi::allgather(send_buf, this->mpi_recv_buf);
 
                 //--- build array_4d
-                CopyFromBuffer<complex_t, complex_t> copy_from_buffer;
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
                     const int   n_grid_out = this->get_n_grid_out(i_proc);
                     const auto  index_out  = this->get_index_out( i_proc);
@@ -681,7 +758,7 @@ namespace OpenFFT {
                                                                   n_grid_out,
                                                                   index_out,
                                                                   Apply4DInterface<complex_t>{},
-                                                                  copy_from_buffer);
+                                                                  CopyFromBuffer{} );
                 }
             }
 
@@ -1207,13 +1284,12 @@ namespace OpenFFT {
                         elem.index  = i;
                     }
 
-                    CopyFromBuffer<IndexMark, IndexMark> copy_from_buffer;
                     this->_apply_3d_array_with_output_buffer_impl(this->out_in_convert_matrix.data(),
                                                                   this->index_array.data(),
                                                                   n_grid_out,
                                                                   index_out,
                                                                   Apply3DInterface<IndexMark>{},
-                                                                  copy_from_buffer );
+                                                                  CopyFromBuffer{} );
                 }
 
                 if(report_matrix){
@@ -1245,14 +1321,13 @@ namespace OpenFFT {
                     const IndexList index_in  = this->index_in_list[i_proc];
 
                     //--- get source index
-                    CopyIntoBuffer<IndexMark, IndexMark> copy_from_buffer;
                     this->index_array.resize(n_grid_in);
                     this->_apply_3d_array_with_input_buffer_impl(this->out_in_convert_matrix.data(),
                                                                  this->index_array.data(),
                                                                  n_grid_in,
                                                                  index_in,
                                                                  Apply3DInterface<IndexMark>{},
-                                                                 copy_from_buffer );
+                                                                 CopyIntoBuffer{} );
 
                     if(report_matrix){
                         if(my_rank == 0){

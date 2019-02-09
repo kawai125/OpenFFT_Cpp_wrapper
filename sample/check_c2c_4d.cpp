@@ -60,7 +60,11 @@ void check_4d_array(const int n1, const int n2, const int n3, const int n4,
 int main(int argc, char* argv[])
 {
     int numprocs,myid;
-    int const N1=3,N2=4,N3=5,N4=6;
+    const int N1=3;
+    const int N2=4;
+    const int N3=5;
+    const int N4=6;
+    const int n_total = N1*N2*N3*N4;
     int offt_measure,measure_time,print_memory;
     int i,j,k,m;
     double factor;
@@ -161,7 +165,7 @@ int main(int argc, char* argv[])
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    factor = sqrt(N1*N2*N3*N4);
+    factor = sqrt(n_total);
 
     for(m=0;m<N1;m++){
         for(i=0;i<N2;i++){
@@ -204,7 +208,7 @@ int main(int argc, char* argv[])
 
     /* Gather results from all processes */
 
-    MPI_Allreduce(Out, Output, N1*N2*N3*N4,
+    MPI_Allreduce( &(Out[0][0][0][0]), &(Output[0][0][0][0]), n_total,
                   MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
 
     /* Print global output */

@@ -19,14 +19,14 @@ namespace OpenFFT {
     typedef struct { double r,i; } dcomplex;
 
     //--- functor sample for buffer manipulator
-    template <class Tarr, class Tbuf>
     struct CopyIntoBuffer{
+        template <class Tarr, class Tbuf>
         void operator () (const Tarr &arr_v, Tbuf &buf_v){
             buf_v = arr_v;
         }
     };
-    template <class Tarr, class Tbuf>
     struct CopyFromBuffer{
+        template <class Tarr, class Tbuf>
         void operator () (Tarr &arr_v, const Tbuf &buf_v){
             arr_v = buf_v;
         }

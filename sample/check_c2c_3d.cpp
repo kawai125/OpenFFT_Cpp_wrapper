@@ -40,10 +40,10 @@ void check_3d_array(const int n1, const int n2, const int n3,
         }
     }
     if(check_flag){
-        print_green("   Check done.");
+        print_green("        Check done.");
         printf(     " All elements are correct.\n");
     } else {
-        print_red(  "   Check faulure.");
+        print_red(  "        Check faulure.");
         printf(     " Some elements are incorrect.\n");
     }
 }
@@ -71,10 +71,10 @@ void check_buffer(const int  n_grid,
         }
     }
     if( ! check_flag ){
-        oss_red(oss, "   Check failure.");
+        oss_red(oss,   "        Check failure.");
         oss << " Some elements are incorrect at proc=" << my_rank << "\n";
     } else {
-        oss_green(oss, "   Check done.");
+        oss_green(oss, "        Check done.");
         oss << " All elements are correct at proc=" << my_rank << "\n";
     }
     std::cout << oss.str() << std::flush;
@@ -414,10 +414,10 @@ int main(int argc, char* argv[])
         }
 
         if( ! check_flag ){
-            print_red(  "   Check failure.");
+            print_red(  "        Check failure.");
             printf(     " Some elements are incorrect.\n");
         } else {
-            print_green("   Check done.");
+            print_green("        Check done.");
             printf(     " All elements are correct.\n");
         }
     }
@@ -500,6 +500,97 @@ int main(int argc, char* argv[])
                        &(IFFT_Output[0][0][0]), &(Input[0][0][0]) );
     }
     MPI_Barrier(MPI_COMM_WORLD);
+
+    //--- check index sequence generator
+    std::vector<std::array<int, 3>> index_seq;
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(myid == 0) printf("\n");
+    for(int i_proc=0; i_proc<numprocs; ++i_proc){
+        if(i_proc == myid){
+            std::ostringstream oss;
+            oss_green(oss, " -- check index sequence generator for input buffer");
+            oss << " at proc=" << myid << "\n";
+            printf(oss.str().c_str());
+
+            std::vector<OpenFFT::dcomplex> buf, buf_ref;
+            fft_mngr.copy_3d_array_into_input_buffer( &(Input[0][0][0]), buf_ref);
+
+            print_green("    Manager<>::gen_3d_input_index_sequence()\n");
+            fft_mngr.gen_3d_input_index_sequence(index_seq);
+            buf.clear();
+            for(const auto& index : index_seq){
+                buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ] );
+            }
+            check_buffer(My_NumGrid_In,
+                         buf.data(),
+                         buf_ref.data(), myid );
+
+            for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
+                buf_ref.resize( fft_mngr.get_n_grid_in(tgt_proc) );
+                fft_mngr.apply_3d_array_with_input_buffer( &(Input[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
+
+                print_green("    Manager<>::gen_3d_input_index_sequence( tgt_proc )");
+                printf(", tgt_proc=%d\n", tgt_proc);
+
+                fft_mngr.gen_3d_input_index_sequence(index_seq, tgt_proc);
+                buf.clear();
+                for(const auto& index : index_seq){
+                    buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ] );
+                }
+                check_buffer(My_NumGrid_In,
+                             buf.data(),
+                             buf_ref.data(), myid );
+            }
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+
+/*
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(myid == 0) printf("\n");
+    for(int i_proc=0; i_proc<numprocs; ++i_proc){
+        if(i_proc == myid){
+            std::ostringstream oss;
+            oss_green(oss, " -- check index sequence generator for output buffer");
+            oss << " at proc=" << myid << "\n";
+            printf(oss.str().c_str());
+
+            std::vector<OpenFFT::dcomplex> buf, buf_ref;
+            buf_ref.resize( fft_mngr.get_n_grid_out() );
+            fft_mngr.apply_3d_array_with_output_buffer( &(Output[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{} );
+
+            print_green("    Manager<>::gen_3d_output_index_sequence()\n");
+
+            fft_mngr.gen_3d_output_index_sequence(index_seq);
+            buf.clear();
+            for(const auto& index : index_seq){
+                buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
+            }
+            check_buffer(My_NumGrid_In,
+                         buf.data(),
+                         buf_ref.data(), myid );
+
+            for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
+                buf_ref.resize( fft_mngr.get_n_grid_out(tgt_proc) );
+                fft_mngr.apply_3d_array_with_output_buffer( &(Output[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
+
+                print_green("    Manager<>::gen_3d_output_index_sequence( tgt_proc )");
+                printf(", tgt_proc=%d\n", tgt_proc);
+
+                fft_mngr.gen_3d_output_index_sequence(index_seq, tgt_proc);
+                buf.clear();
+                for(const auto& index : index_seq){
+                    buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
+                }
+                check_buffer(My_NumGrid_In,
+                             buf.data(),
+                             buf_ref.data(), myid );
+            }
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+    */
 
     /* Finalize OpenFFT */
     fft_mngr.finalize();
