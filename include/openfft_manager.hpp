@@ -536,7 +536,7 @@ namespace OpenFFT {
         template <class Alloc_seq>
         void gen_3d_input_index_sequence(      std::vector<std::array<int, 3>, Alloc_seq> &index_seq,
                                          const int                                         i_proc    ) const {
-            index_seq.resize( this->get_n_grid_in() );
+            index_seq.resize( this->get_n_grid_in(i_proc) );
             _impl::fp64_global_mngr.gen_3d_input_index_sequence(index_seq.data(), i_proc);
         }
         template <class Alloc_seq>
@@ -547,7 +547,7 @@ namespace OpenFFT {
         template <class Alloc_seq>
         void gen_3d_output_index_sequence(      std::vector<std::array<int, 3>, Alloc_seq> &index_seq,
                                           const int                                         i_proc    ) const {
-            index_seq.resize( this->get_n_grid_out() );
+            index_seq.resize( this->get_n_grid_out(i_proc) );
             _impl::fp64_global_mngr.gen_3d_output_index_sequence(index_seq.data(), i_proc);
         }
 
@@ -559,7 +559,7 @@ namespace OpenFFT {
         template <class Alloc_seq>
         void gen_4d_input_index_sequence(      std::vector<std::array<int, 4>, Alloc_seq> &index_seq,
                                          const int                                         i_proc    ) const {
-            index_seq.resize( this->get_n_grid_in() );
+            index_seq.resize( this->get_n_grid_in(i_proc) );
             _impl::fp64_global_mngr.gen_4d_input_index_sequence(index_seq.data(), i_proc);
         }
         template <class Alloc_seq>
@@ -570,7 +570,7 @@ namespace OpenFFT {
         template <class Alloc_seq>
         void gen_4d_output_index_sequence(      std::vector<std::array<int, 4>, Alloc_seq> &index_seq,
                                           const int                                         i_proc    ) const {
-            index_seq.resize( this->get_n_grid_out() );
+            index_seq.resize( this->get_n_grid_out(i_proc) );
             _impl::fp64_global_mngr.gen_4d_output_index_sequence(index_seq.data(), i_proc);
         }
 

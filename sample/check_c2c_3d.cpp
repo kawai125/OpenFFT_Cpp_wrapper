@@ -527,7 +527,8 @@ int main(int argc, char* argv[])
                          buf_ref.data(), myid );
 
             for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
-                buf_ref.resize( fft_mngr.get_n_grid_in(tgt_proc) );
+                const int n_grid_in = fft_mngr.get_n_grid_in(tgt_proc);
+                buf_ref.resize( n_grid_in );
                 fft_mngr.apply_3d_array_with_input_buffer( &(Input[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
 
                 print_green("    Manager<>::gen_3d_input_index_sequence( tgt_proc )");
@@ -538,7 +539,7 @@ int main(int argc, char* argv[])
                 for(const auto& index : index_seq){
                     buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ] );
                 }
-                check_buffer(My_NumGrid_In,
+                check_buffer(n_grid_in,
                              buf.data(),
                              buf_ref.data(), myid );
             }
@@ -546,7 +547,6 @@ int main(int argc, char* argv[])
         MPI_Barrier(MPI_COMM_WORLD);
     }
 
-/*
     MPI_Barrier(MPI_COMM_WORLD);
     if(myid == 0) printf("\n");
     for(int i_proc=0; i_proc<numprocs; ++i_proc){
@@ -567,12 +567,13 @@ int main(int argc, char* argv[])
             for(const auto& index : index_seq){
                 buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
             }
-            check_buffer(My_NumGrid_In,
+            check_buffer(My_NumGrid_Out,
                          buf.data(),
                          buf_ref.data(), myid );
 
             for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
-                buf_ref.resize( fft_mngr.get_n_grid_out(tgt_proc) );
+                const int n_grid_out = fft_mngr.get_n_grid_out(tgt_proc);
+                buf_ref.resize( n_grid_out );
                 fft_mngr.apply_3d_array_with_output_buffer( &(Output[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
 
                 print_green("    Manager<>::gen_3d_output_index_sequence( tgt_proc )");
@@ -583,14 +584,13 @@ int main(int argc, char* argv[])
                 for(const auto& index : index_seq){
                     buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
                 }
-                check_buffer(My_NumGrid_In,
+                check_buffer(n_grid_out,
                              buf.data(),
                              buf_ref.data(), myid );
             }
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
-    */
 
     /* Finalize OpenFFT */
     fft_mngr.finalize();
