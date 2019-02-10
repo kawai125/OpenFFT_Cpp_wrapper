@@ -11,74 +11,10 @@
 #include <math.h>
 #include <time.h>
 
-#include "color_printer.hpp"
-
 #include "openfft.hpp"
 
-
-template <class T>
-void check_3d_array(const int n1, const int n2, const int n3,
-                    const T *array_3d,
-                    const T *ref_arr  ){
-    bool check_flag = true;
-    for(int iz=0; iz<n1; ++iz){
-        for(int iy=0; iy<n2; ++iy){
-            for(int ix=0; ix<n3; ++ix){
-                const int pos = iz*(n2*n3) + iy*n3 + ix;
-
-                const auto elem = array_3d[pos];
-                const auto ref  = ref_arr[pos];
-                if( std::abs(elem.r - ref.r) > 0.001 ||
-                    std::abs(elem.i - ref.i) > 0.001   ){
-
-                    print_yellow("ERROR");
-                    printf(" array[%d,%d,%d] data=(% 3.3f,% 3.3f), ref=(% 3.3f,% 3.3f)\n",
-                    iz, iy, ix, elem.r, elem.i, ref.r, ref.i);
-                    check_flag = false;
-                }
-            }
-        }
-    }
-    if(check_flag){
-        print_green("        Check done.");
-        printf(     " All elements are correct.\n");
-    } else {
-        print_red(  "        Check faulure.");
-        printf(     " Some elements are incorrect.\n");
-    }
-}
-template <class T>
-void check_buffer(const int  n_grid,
-                  const T   *buf,
-                  const T   *buf_ref,
-                  const int  my_rank ){
-
-    std::ostringstream oss;
-
-    bool check_flag = true;
-    for(int ii=0; ii<n_grid; ++ii){
-        const auto elem = buf[ii];
-        const auto ref  = buf_ref[ii];
-        if( std::abs(elem.r - ref.r) > 0.001 ||
-            std::abs(elem.i - ref.i) > 0.001   ){
-            oss_yellow(oss, "  ERROR");
-            oss << " in buffer[" << ii << "]: data=("
-                << std::setprecision(3) << elem.r << ","
-                << std::setprecision(3) << elem.i << "), ref=("
-                << std::setprecision(3) << ref.r  << ","
-                << std::setprecision(3) << ref.i  << ")\n";
-            check_flag = false;
-        }
-    }
-    if( ! check_flag ){
-        oss_red(oss,   "        Check failure.");
-        oss << " Some elements are incorrect at proc=" << my_rank << "\n";
-    } else {
-        oss_green(oss, "        Check done.");
-        oss << " All elements are correct at proc=" << my_rank << "\n";
-    }
-    std::cout << oss.str() << std::flush;
-}
+#include "color_printer.hpp"
+#include "test_tool.hpp"
 
 
 int main(int argc, char* argv[])
@@ -327,8 +263,8 @@ int main(int argc, char* argv[])
             print_green("[checking FFT output]\n");
             printf(     "\n");
             print_green(" -- using copy_3d_array_from_output_buffer() & MPI_Allreduce()\n");
-            check_3d_array(N1, N2, N3,
-                           &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+            TEST::check_3d_array(N1, N2, N3,
+                                 &(Output[0][0][0]), &(Output_ref[0][0][0]) );
         }
         MPI_Barrier(MPI_COMM_WORLD);
 
@@ -349,8 +285,8 @@ int main(int argc, char* argv[])
                     }
                 }
 
-                check_3d_array(N1, N2, N3,
-                               &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+                TEST::check_3d_array(N1, N2, N3,
+                                     &(Output[0][0][0]), &(Output_ref[0][0][0]) );
             }
             MPI_Barrier(MPI_COMM_WORLD);
         }
@@ -373,8 +309,8 @@ int main(int argc, char* argv[])
         }
 
         if(myid == 0){
-            check_3d_array(N1, N2, N3,
-                           &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+            TEST::check_3d_array(N1, N2, N3,
+                                 &(Output[0][0][0]), &(Output_ref[0][0][0]) );
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
@@ -518,9 +454,9 @@ int main(int argc, char* argv[])
                 oss << " at proc=" << myid << "\n";
                 printf(oss.str().c_str());
 
-                check_buffer(My_NumGrid_In,
-                             input_buffer.data(),
-                             ifft_input_buffer_ref.data(), myid );
+                TEST::check_buffer(My_NumGrid_In,
+                                   input_buffer.data(),
+                                   ifft_input_buffer_ref.data(), myid );
             }
             MPI_Barrier(MPI_COMM_WORLD);
         }
@@ -559,8 +495,8 @@ int main(int argc, char* argv[])
             oss << " at proc=" << myid << "\n";
             printf(oss.str().c_str());
 
-            check_3d_array(N1, N2, N3,
-                           &(IFFT_Output[0][0][0]), &(Input[0][0][0]) );
+            TEST::check_3d_array(N1, N2, N3,
+                                 &(IFFT_Output[0][0][0]), &(Input[0][0][0]) );
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
@@ -593,9 +529,9 @@ int main(int argc, char* argv[])
                 for(const auto& index : index_seq){
                     buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ] );
                 }
-                check_buffer(My_NumGrid_In,
-                             buf.data(),
-                             buf_ref.data(), myid );
+                TEST::check_buffer(My_NumGrid_In,
+                                   buf.data(),
+                                   buf_ref.data(), myid );
 
                 for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
                     const int n_grid_in = fft_mngr.get_n_grid_in(tgt_proc);
@@ -610,9 +546,9 @@ int main(int argc, char* argv[])
                     for(const auto& index : index_seq){
                         buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ] );
                     }
-                    check_buffer(n_grid_in,
-                                 buf.data(),
-                                 buf_ref.data(), myid );
+                    TEST::check_buffer(n_grid_in,
+                                       buf.data(),
+                                       buf_ref.data(), myid );
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
@@ -638,9 +574,9 @@ int main(int argc, char* argv[])
                 for(const auto& index : index_seq){
                     buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
                 }
-                check_buffer(My_NumGrid_Out,
-                             buf.data(),
-                             buf_ref.data(), myid );
+                TEST::check_buffer(My_NumGrid_Out,
+                                   buf.data(),
+                                   buf_ref.data(), myid );
 
                 for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
                     const int n_grid_out = fft_mngr.get_n_grid_out(tgt_proc);
@@ -655,9 +591,9 @@ int main(int argc, char* argv[])
                     for(const auto& index : index_seq){
                         buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
                     }
-                    check_buffer(n_grid_out,
-                                 buf.data(),
-                                 buf_ref.data(), myid );
+                    TEST::check_buffer(n_grid_out,
+                                       buf.data(),
+                                       buf_ref.data(), myid );
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
