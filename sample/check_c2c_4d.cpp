@@ -241,7 +241,7 @@ int main(int argc, char* argv[])
             printf(     "\n");
             print_green("[checking FFT output]\n");
             printf(     "\n");
-            print_green(" -- using copy_4d_array_from_output_buffer() & MPI_Allreduce()\n");
+            print_green("    Manager<>::copy_4d_array_from_output_buffer() & MPI_Allreduce()\n");
             TEST::check_4d_array(N1, N2, N3, N4,
                                  &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
         }
@@ -253,7 +253,7 @@ int main(int argc, char* argv[])
 
             MPI_Barrier(MPI_COMM_WORLD);
             if(myid == i_proc){
-                print_green(" -- using Manager::gather_4d_array()");
+                print_green("    Manager<>::gather_4d_array()");
                 printf(     " at proc=%d\n", i_proc);
 
                 for(m=0;m<N1;m++){
@@ -290,10 +290,213 @@ int main(int argc, char* argv[])
         MPI_Barrier(MPI_COMM_WORLD);
         for(int i_proc=0; i_proc<numprocs; ++i_proc){
             if(myid == i_proc){
-                print_green(" -- using Manager::allgather_4d_array()");
+                print_green("    Manager<>::allgather_4d_array()");
                 printf(     " at proc=%d\n", i_proc);
                 TEST::check_4d_array(N1, N2, N3, N4,
                                      &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
+    }
+
+    //==========================================================================
+    //  functor interface test
+    //==========================================================================
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf("\n");
+            print_green("[functor interface test]\n");
+            printf("\n");
+            print_green(" -- check functor interface for input buffer\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        OpenFFT::dcomplex sum_v;
+        OpenFFT::dcomplex sum_v_ref;
+
+        sum_v_ref.r = 0.0;
+        sum_v_ref.i = 0.0;
+        for(m=0;m<N1;m++){
+            for(i=0;i<N2;i++){
+                for(j=0;j<N3;j++){
+                    for(k=0;k<N4;k++){
+                        sum_v_ref.r += Input[m][i][j][k].r * Output[m][i][j][k].r;
+                        sum_v_ref.i += Input[m][i][j][k].i * Output[m][i][j][k].i;
+                    }
+                }
+            }
+        }
+
+        struct ReduceValue{
+            OpenFFT::dcomplex v {0.0, 0.0};
+            double            factor = 1.0;
+            void operator () (const OpenFFT::dcomplex arr_v, const OpenFFT::dcomplex buf_v){
+                this->v.r += arr_v.r * buf_v.r / this->factor;
+                this->v.i += arr_v.i * buf_v.i / this->factor;
+            }
+        };
+        ReduceValue reduce_value;
+
+        reduce_value.factor = 1.0;
+        fft_mngr.copy_4d_array_into_input_buffer( &(Input[0][0][0][0]), input_buffer);
+        const auto local_sum_ib = fft_mngr.apply_4d_array_with_input_buffer( &(Output[0][0][0][0]),
+                                                                              input_buffer,
+                                                                              reduce_value );
+
+        MPI_Allreduce(&local_sum_ib.v, &sum_v, 1,
+                      MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
+
+        if(myid == 0){
+            bool check_flag = true;
+            if( std::abs(sum_v.r - sum_v_ref.r) > 0.0001 ||
+                std::abs(sum_v.i - sum_v_ref.i) > 0.0001   ){
+                check_flag = false;
+                print_yellow("  ERROR:");
+                printf(" reduced sum_v = (% 6.5f,% 6.5f), ref = (% 6.5f,% 6.5f)\n",
+                       sum_v.r, sum_v.i, sum_v_ref.r, sum_v_ref.i);
+            }
+
+            if( ! check_flag ){
+                print_red(  "        Check failure.");
+                printf(     " Some elements are incorrect.\n");
+            } else {
+                print_green("        Check done.");
+                printf(     " All elements are correct.\n");
+            }
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf("\n");
+            print_green(" -- check functor interface for output buffer\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        reduce_value.v.r    = 0.0;
+        reduce_value.v.i    = 0.0;
+        reduce_value.factor = factor;
+        const auto local_sum_ob = fft_mngr.apply_4d_array_with_output_buffer( &(Input[0][0][0][0]),
+                                                                              output_buffer,
+                                                                              reduce_value );
+
+        MPI_Allreduce(&local_sum_ob.v, &sum_v, 1,
+                      MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
+
+        if(myid == 0){
+            bool check_flag = true;
+            if( std::abs(sum_v.r - sum_v_ref.r) > 0.0001 ||
+                std::abs(sum_v.i - sum_v_ref.i) > 0.0001   ){
+                check_flag = false;
+                print_yellow("  ERROR:");
+                printf(" reduced sum_v = (% 6.5f,% 6.5f), ref = (% 6.5f,% 6.5f)\n",
+                       sum_v.r, sum_v.i, sum_v_ref.r, sum_v_ref.i);
+            }
+
+            if( ! check_flag ){
+                print_red(  "        Check failure.");
+                printf(     " Some elements are incorrect.\n");
+            } else {
+                print_green("        Check done.");
+                printf(     " All elements are correct.\n");
+            }
+        }
+    }
+
+    //==========================================================================
+    //  index sequence generator test
+    //==========================================================================
+    {
+        std::vector<std::array<int, 4>> index_seq;
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf("\n");
+            print_green("[index sequence generator test]\n");
+            printf("\n");
+        }
+        for(int i_proc=0; i_proc<numprocs; ++i_proc){
+            if(i_proc == myid){
+                std::ostringstream oss;
+                oss_green(oss, " -- check index for input buffer");
+                oss << " at proc=" << myid << "\n";
+                printf(oss.str().c_str());
+
+                std::vector<OpenFFT::dcomplex> buf, buf_ref;
+                fft_mngr.copy_4d_array_into_input_buffer( &(Input[0][0][0][0]), buf_ref);
+
+                print_green("    Manager<>::gen_4d_input_index_sequence()\n");
+                fft_mngr.gen_4d_input_index_sequence(index_seq);
+                buf.clear();
+                for(const auto& index : index_seq){
+                    buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ][ index[3] ] );
+                }
+                TEST::check_buffer(My_NumGrid_In,
+                                   buf.data(),
+                                   buf_ref.data(), myid );
+
+                for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
+                    const int n_grid_in = fft_mngr.get_n_grid_in(tgt_proc);
+                    buf_ref.resize( n_grid_in );
+                    fft_mngr.apply_4d_array_with_input_buffer( &(Input[0][0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
+
+                    print_green("    Manager<>::gen_4d_input_index_sequence( tgt_proc )");
+                    printf(", tgt_proc=%d\n", tgt_proc);
+
+                    fft_mngr.gen_4d_input_index_sequence(index_seq, tgt_proc);
+                    buf.clear();
+                    for(const auto& index : index_seq){
+                        buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ][ index[3] ] );
+                    }
+                    TEST::check_buffer(n_grid_in,
+                                       buf.data(),
+                                       buf_ref.data(), myid );
+                }
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0) printf("\n");
+        for(int i_proc=0; i_proc<numprocs; ++i_proc){
+            if(i_proc == myid){
+                std::ostringstream oss;
+                oss_green(oss, " -- check for output buffer");
+                oss << " at proc=" << myid << "\n";
+                printf(oss.str().c_str());
+
+                std::vector<OpenFFT::dcomplex> buf, buf_ref;
+                buf_ref.resize( fft_mngr.get_n_grid_out() );
+                fft_mngr.apply_4d_array_with_output_buffer( &(Output[0][0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{} );
+
+                print_green("    Manager<>::gen_4d_output_index_sequence()\n");
+
+                fft_mngr.gen_4d_output_index_sequence(index_seq);
+                buf.clear();
+                for(const auto& index : index_seq){
+                    buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ][ index[3] ] );
+                }
+                TEST::check_buffer(My_NumGrid_Out,
+                                   buf.data(),
+                                   buf_ref.data(), myid );
+
+                for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
+                    const int n_grid_out = fft_mngr.get_n_grid_out(tgt_proc);
+                    buf_ref.resize( n_grid_out );
+                    fft_mngr.apply_4d_array_with_output_buffer( &(Output[0][0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
+
+                    print_green("    Manager<>::gen_4d_output_index_sequence( tgt_proc )");
+                    printf(", tgt_proc=%d\n", tgt_proc);
+
+                    fft_mngr.gen_4d_output_index_sequence(index_seq, tgt_proc);
+                    buf.clear();
+                    for(const auto& index : index_seq){
+                        buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ][ index[3] ] );
+                    }
+                    TEST::check_buffer(n_grid_out,
+                                       buf.data(),
+                                       buf_ref.data(), myid );
+                }
             }
             MPI_Barrier(MPI_COMM_WORLD);
         }
