@@ -28,6 +28,7 @@ int main(int argc, char* argv[])
     double factor;
 
     double            Input[N1][N2][N3];
+    OpenFFT::dcomplex Out[N1][N2][N3r];
     OpenFFT::dcomplex Output[N1][N2][N3r];
     OpenFFT::dcomplex Output_ref[N1][N2][N3r];
 
@@ -158,24 +159,35 @@ int main(int argc, char* argv[])
     for(i=0;i<N1;i++){
         for(j=0;j<N2;j++){
             for(k=0;k<N3r;k++){
+                Out[i][j][k].r = 0.0;
+                Out[i][j][k].i = 0.0;
+            }
+        }
+    }
+
+    /* Gather results from all processes */
+    fft_mngr.copy_3d_array_from_output_buffer( &(Out[0][0][0]), output_buffer);
+
+    for(i=0;i<N1;i++){
+        for(j=0;j<N2;j++){
+            for(k=0;k<N3r;k++){
+                Out[i][j][k].r /= factor;
+                Out[i][j][k].i /= factor;
+            }
+        }
+    }
+
+    for(i=0;i<N1;i++){
+        for(j=0;j<N2;j++){
+            for(k=0;k<N3r;k++){
                 Output[i][j][k].r = 0.0;
                 Output[i][j][k].i = 0.0;
             }
         }
     }
 
-    /* Gather results from all processes */
-
-    fft_mngr.allgather_3d_array( &(Output[0][0][0]), output_buffer);
-
-    for(i=0;i<N1;i++){
-        for(j=0;j<N2;j++){
-            for(k=0;k<N3r;k++){
-                Output[i][j][k].r /= factor;
-                Output[i][j][k].i /= factor;
-            }
-        }
-    }
+    MPI_Allreduce(Out, Output, N1*N2*N3r,
+                  MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
 
     /* Print global output */
 
@@ -221,9 +233,64 @@ int main(int argc, char* argv[])
     //==========================================================================
     //  Gather results interface test
     //==========================================================================
-    if( myid == 0){
-        TEST::check_3d_array(N1, N2, N3r,
-                             &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf(     "\n");
+            print_green("[checking FFT output]\n");
+            printf(     "\n");
+            print_green(" -- using copy_3d_array_from_output_buffer() & MPI_Allreduce()\n");
+            TEST::check_3d_array(N1, N2, N3r,
+                                 &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+            printf(     "\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        for(int i_proc=0; i_proc<numprocs; ++i_proc){
+            fft_mngr.gather_3d_array( &(Output[0][0][0]), output_buffer, i_proc );
+
+            MPI_Barrier(MPI_COMM_WORLD);
+            if(myid == i_proc){
+                print_green(" -- using Manager::gather_3d_array()");
+                printf(     " at proc=%d\n", i_proc);
+
+                for(i=0;i<N1;i++){
+                    for(j=0;j<N2;j++){
+                        for(k=0;k<N3r;k++){
+                            Output[i][j][k].r /= factor;
+                            Output[i][j][k].i /= factor;
+                        }
+                    }
+                }
+
+                TEST::check_3d_array(N1, N2, N3r,
+                                     &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
+
+
+        if(myid == 0){
+            printf(     "\n");
+            print_green(" -- using Manager::allgather_3d_array() )\n");
+        }
+
+        fft_mngr.allgather_3d_array( &(Output[0][0][0]), output_buffer );
+
+        for(i=0;i<N1;i++){
+            for(j=0;j<N2;j++){
+                for(k=0;k<N3r;k++){
+                    Output[i][j][k].r /= factor;
+                    Output[i][j][k].i /= factor;
+                }
+            }
+        }
+
+        if(myid == 0){
+            TEST::check_3d_array(N1, N2, N3r,
+                                 &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
     }
 
   /* Finalize OpenFFT */

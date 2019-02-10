@@ -265,6 +265,7 @@ int main(int argc, char* argv[])
             print_green(" -- using copy_3d_array_from_output_buffer() & MPI_Allreduce()\n");
             TEST::check_3d_array(N1, N2, N3,
                                  &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+            printf(     "\n");
         }
         MPI_Barrier(MPI_COMM_WORLD);
 
