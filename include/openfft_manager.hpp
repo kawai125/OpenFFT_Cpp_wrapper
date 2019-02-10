@@ -13,6 +13,7 @@
 #include <vector>
 #include <sstream>
 #include <exception>
+#include <cstdint>
 
 #include "openfft_defs.hpp"
 #include "openfft_global_manager.hpp"
@@ -139,6 +140,9 @@ namespace OpenFFT {
                                 std::vector<complex_t, Alloc_c> &output){
 
             //--- check buffer size
+            this->_reserve_buffer_capacity(input);
+            this->_reserve_buffer_capacity(output);
+            //--- check data length
             this->_check_buffer_length(input, this->get_n_grid_in());
             output.resize(this->get_n_grid_out());
 
@@ -155,6 +159,9 @@ namespace OpenFFT {
                                 std::vector<complex_t, Alloc_R> &output){
 
             //--- check buffer size
+            this->_reserve_buffer_capacity(input);
+            this->_reserve_buffer_capacity(output);
+            //--- check data length
             this->_check_buffer_length(input, this->get_n_grid_in());
             output.resize(this->get_n_grid_out());
 
@@ -170,6 +177,9 @@ namespace OpenFFT {
                                  std::vector<complex_t, Alloc_R> &output){
 
             //--- check buffer size
+            this->_reserve_buffer_capacity(input);
+            this->_reserve_buffer_capacity(output);
+            //--- check data length
             this->_check_buffer_length(input, this->get_n_grid_in());
             output.resize(this->get_n_grid_out());
 
@@ -187,6 +197,9 @@ namespace OpenFFT {
                                 std::vector<complex_t, Alloc_R> &output){
 
             //--- check buffer size
+            this->_reserve_buffer_capacity(input);
+            this->_reserve_buffer_capacity(output);
+            //--- check data length
             this->_check_buffer_length(input, this->get_n_grid_in());
             output.resize(this->get_n_grid_out());
 
@@ -203,6 +216,9 @@ namespace OpenFFT {
                                  std::vector<complex_t, Alloc_R> &output){
 
             //--- check buffer size
+            this->_reserve_buffer_capacity(input);
+            this->_reserve_buffer_capacity(output);
+            //--- check data length
             this->_check_buffer_length(input, this->get_n_grid_in());
             output.resize(this->get_n_grid_out());
 
@@ -655,6 +671,22 @@ namespace OpenFFT {
                     << "   buffer size = " << buf.size()
                     << ", must be = " << n_grid << "\n";
                 throw std::length_error(oss.str());
+            }
+        }
+        template <class Tf, class Alloc>
+        void _check_buffer_capacity(const std::vector<Tf, Alloc> &buf) const {
+            if( static_cast<int_fast64_t>(buf.capacity()) < this->get_max_n_grid() ){
+                std::ostringstream oss;
+                oss << "buffer capacity is not enough." << "\n"
+                    << "   buffer capacity = " << buf.capacity()
+                    << ", must be >= " << this->get_max_n_grid() << "\n";
+                throw std::length_error(oss.str());
+            }
+        }
+        template <class Tf, class Alloc>
+        void _reserve_buffer_capacity(std::vector<Tf, Alloc> &buf) const {
+            if( static_cast<int_fast64_t>(buf.capacity()) < this->get_max_n_grid() ){
+                buf.reserve( this->get_max_n_grid() );
             }
         }
     };

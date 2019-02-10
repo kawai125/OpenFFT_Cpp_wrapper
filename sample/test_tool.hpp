@@ -104,4 +104,43 @@ namespace TEST {
         std::cout << oss.str() << std::flush;
     }
 
+
+    template <class T>
+    void check_4d_array(const int n1, const int n2, const int n3, const int n4,
+                        const T *array_4d,
+                        const T *ref_arr  ){
+
+        int fail_count = 0;
+        for(int iw=0; iw<n1; ++iw){
+            for(int iz=0; iz<n2; ++iz){
+                for(int iy=0; iy<n3; ++iy){
+                    for(int ix=0; ix<n4; ++ix){
+                        const int pos = iw*(n4*n3*n2)
+                                      + iz*(n4*n3)
+                                      + iy*(n4)
+                                      + ix;
+
+                        const auto elem = array_4d[pos];
+                        const auto ref  = ref_arr[pos];
+                        if( std::abs(elem.r - ref.r) > 0.001 ||
+                            std::abs(elem.i - ref.i) > 0.001   ){
+                            print_yellow("ERROR");
+                            printf(" array[%d,%d,%d,%d] data=(% 3.3f,% 3.3f), ref=(% 3.3f,% 3.3f)\n",
+                                    iw, iz, iy, ix, elem.r, elem.i, ref.r, ref.i);
+                            ++fail_count;
+                        }
+                    }
+                }
+            }
+        }
+        if(fail_count == 0){
+            print_green("        Check done.");
+            printf(     " All elements are correct.\n");
+        } else {
+            print_red(  "        Check failure.");
+            printf(     " Some elements are incorrect. failed = %d/%d points.\n",
+                   fail_count, n1*n2*n3*n4);
+        }
+    }
+
 }

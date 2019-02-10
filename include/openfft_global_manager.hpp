@@ -156,9 +156,6 @@ namespace OpenFFT {
             bool out_in_convert_flag     = false;
             bool out_in_convert_mpi_flag = false;
 
-            int n_proc  = 0;
-            int my_rank = 0;
-
             FFT_GridType grid_type = FFT_GridType::none;
             int          n_x, n_y, n_z, n_w;
 
@@ -218,9 +215,8 @@ namespace OpenFFT {
                 this->n_x = n_x;
                 this->n_y = n_y;
                 this->n_z = n_z;
-                this->n_w = 1;
+                this->n_w = 0;
 
-                this->_set_mpi_proc_info();
                 this->_collect_buffer_info();  // enable gather function
                 this->plan_flag = true;
             }
@@ -241,9 +237,8 @@ namespace OpenFFT {
                 this->n_x = n_x;
                 this->n_y = n_y;
                 this->n_z = n_z;
-                this->n_w = 1;
+                this->n_w = 0;
 
-                this->_set_mpi_proc_info();
                 this->_prepare_3d_out_in_convert(false);  // enable gather and convert function
                 this->plan_flag = true;
             }
@@ -266,7 +261,6 @@ namespace OpenFFT {
                 this->n_z = n_z;
                 this->n_w = n_w;
 
-                this->_set_mpi_proc_info();
                 this->_collect_buffer_info();  // enable gather function
                 this->plan_flag = true;
             }
@@ -294,7 +288,7 @@ namespace OpenFFT {
                               const int          n_y,
                               const int          n_x,
                               const FFT_GridType grid_type) const {
-                return this->is_same_grid(1, n_z, n_y, n_x, grid_type);
+                return this->is_same_grid(0, n_z, n_y, n_x, grid_type);
             }
             bool is_same_grid(const int          n_w,
                               const int          n_z,
@@ -385,11 +379,9 @@ namespace OpenFFT {
                 //--- performe forword FFT
                 openfft_exec_c2c_4d(input, output);
 
-                //--- get complex conjugate and divide by N
-                const double N_inv = 1.0/static_cast<double>( this->n_x
-                                                             *this->n_y
-                                                             *this->n_z
-                                                             *this->n_w );
+                //--- get complex conjugate
+                //       note: FFT_BACKWARD transforme of FFTW3, it not devide by (NZ * Ny * Zx).
+                //             this implementation take compatibility with FFTW3.
                 for(int i=0; i<this->my_n_grid_out; ++i){
                     output[i].r =   output[i].r * N_inv;
                     output[i].i = - output[i].i * N_inv;
@@ -594,7 +586,7 @@ namespace OpenFFT {
 
                 if(this->out_in_convert_mpi_flag){
                     //--- convert with MPI Alltoall
-                    const int n_proc = this->_get_n_proc();
+                    const int n_proc = _mpi::get_n_proc();
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
                         auto&       send_buf   = this->mpi_send_buf[i_proc];
@@ -621,7 +613,7 @@ namespace OpenFFT {
                     }
                 } else {
                     //--- convert in local
-                    const int my_rank = this->_get_my_rank();
+                    const int my_rank = _mpi::get_rank();
                     auto& send_buf = this->mpi_send_buf[my_rank];
                     send_buf.clear();
 
@@ -652,8 +644,8 @@ namespace OpenFFT {
                                  const int        tgt_proc   ){
 
                 //--- make send buffer
-                const int n_proc  = this->_get_n_proc();
-                const int my_rank = this->_get_my_rank();
+                const int n_proc  = _mpi::get_n_proc();
+                const int my_rank = _mpi::get_rank();
 
                 auto& send_buf = this->mpi_send_buf[my_rank];
                 send_buf.resize(this->my_n_grid_out);
@@ -684,8 +676,8 @@ namespace OpenFFT {
                                     const complex_t *output_buf){
 
                 //--- make send buffer
-                const int n_proc  = this->_get_n_proc();
-                const int my_rank = this->_get_my_rank();
+                const int n_proc  = _mpi::get_n_proc();
+                const int my_rank = _mpi::get_rank();
 
                 auto& send_buf = this->mpi_send_buf[my_rank];
                 send_buf.resize(this->my_n_grid_out);
@@ -715,10 +707,10 @@ namespace OpenFFT {
                                  const int        tgt_proc   ){
 
                 //--- make send buffer
-                const int n_proc  = this->_get_n_proc();
-                const int my_rank = this->_get_my_rank();
+                const int n_proc  = _mpi::get_n_proc();
+                const int my_rank = _mpi::get_rank();
 
-                auto& send_buf = this->mpi_send_buf[my_rank];
+                auto& send_buf = this->mpi_send_buf[tgt_proc];
                 send_buf.resize(this->my_n_grid_out);
                 for(int ii=0; ii<this->my_n_grid_out; ++ii){
                     send_buf[ii] = output_buf[ii];
@@ -731,24 +723,20 @@ namespace OpenFFT {
 
                 //--- build array_4d
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    const int   n_grid_out = this->get_n_grid_out(i_proc);
-                    const auto  index_out  = this->get_index_out( i_proc);
-                    const auto& recv_buf   = this->mpi_recv_buf[i_proc];
+                    const auto& recv_buf   = this->mpi_recv_buf.at(i_proc);
 
-                    this->_apply_4d_array_with_output_buffer_impl(array_4d,
-                                                                  recv_buf.data(),
-                                                                  n_grid_out,
-                                                                  index_out,
-                                                                  Apply4DInterface<complex_t, const complex_t, CopyFromBuffer>{},
-                                                                  CopyFromBuffer{} );
+                    this->apply_4d_array_with_output_buffer(array_4d,
+                                                            recv_buf.data(),
+                                                            CopyFromBuffer{},
+                                                            i_proc );
                 }
             }
             void allgather_4d_array(      complex_t *array_4d,
                                     const complex_t *output_buf){
 
                 //--- make send buffer
-                const int n_proc  = this->_get_n_proc();
-                const int my_rank = this->_get_my_rank();
+                const int n_proc  = _mpi::get_n_proc();
+                const int my_rank = _mpi::get_rank();
 
                 auto& send_buf = this->mpi_send_buf[my_rank];
                 send_buf.resize(this->my_n_grid_out);
@@ -783,7 +771,7 @@ namespace OpenFFT {
 
                     case FFT_GridType::c2c_4D:
                         _mpi::barrier();
-                        if(this->_get_my_rank() == 0){
+                        if(_mpi::get_rank() == 0){
                             std::cout << "convert function is not implemented for c2c_4D." << std::endl;
                         }
                         _mpi::barrier();
@@ -791,7 +779,7 @@ namespace OpenFFT {
 
                     case FFT_GridType::r2c_3D:
                         _mpi::barrier();
-                        if(this->_get_my_rank() == 0){
+                        if(_mpi::get_rank() == 0){
                             std::cout << "convert function is not implemented for r2c_3D." << std::endl;
                         }
                         _mpi::barrier();
@@ -799,7 +787,7 @@ namespace OpenFFT {
 
                     case FFT_GridType::none:
                         _mpi::barrier();
-                        if(this->_get_my_rank() == 0){
+                        if(_mpi::get_rank() == 0){
                             std::cout << "OpenFFT is not initialized." << std::endl;
                         }
                         _mpi::barrier();
@@ -812,17 +800,11 @@ namespace OpenFFT {
             }
 
         private:
-            void _set_mpi_proc_info(){
-                this->n_proc  = _mpi::get_n_proc();
-                this->my_rank = _mpi::get_rank();
-            }
-            int _get_n_proc()  const { return this->n_proc;  }
-            int _get_my_rank() const { return this->my_rank; }
             void _check_rank(const int i) const {
                 #ifndef NDEBUG
-                    if( i < 0 || this->n_proc <= i){
+                    if( i < 0 || _mpi::get_n_proc() <= i){
                         std::ostringstream oss;
-                        oss << "invalid process rank: " << i << ", must be in range: [0, " << this->n_proc-1 << "].\n";
+                        oss << "invalid process rank: " << i << ", must be in range: [0, " << _mpi::get_n_proc()-1 << "].\n";
                         throw std::invalid_argument(oss.str());
                     }
                 #endif
@@ -1144,7 +1126,7 @@ namespace OpenFFT {
                                                                     ApplyInterface  apply_interface,
                                                                     ApplyFunc       apply_func      ) const {
 
-                if(n_grid_out <= 0) return apply_func;
+            //    if(n_grid_out <= 0) return apply_func;
 
                 if(this->grid_type != FFT_GridType::c2c_4D ){
                        std::ostringstream oss;
@@ -1265,7 +1247,7 @@ namespace OpenFFT {
             }
 
             void _collect_buffer_info(){
-                const int n_proc  = this->_get_n_proc();
+                const int n_proc = _mpi::get_n_proc();
 
                 //--- collect range info
                 _mpi::allgather(this->my_n_grid_in , this->n_grid_in_list );
@@ -1276,16 +1258,19 @@ namespace OpenFFT {
                 this->mpi_send_index.resize(n_proc);
                 this->mpi_recv_index.resize(n_proc);
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    this->mpi_send_index[i_proc].clear();
-                    this->mpi_recv_index[i_proc].clear();
+                    this->mpi_send_index.at(i_proc).clear();
+                    this->mpi_recv_index.at(i_proc).clear();
+
+                    this->mpi_send_index.at(i_proc).reserve( this->get_n_grid_out(i_proc) );
+                    this->mpi_recv_index.at(i_proc).reserve( this->get_n_grid_out(i_proc) );
                 }
 
                 this->mpi_send_buf.resize(n_proc);
                 this->mpi_recv_buf.resize(n_proc);
             }
             void _prepare_3d_out_in_convert(const bool report_matrix = false){
-                const int n_proc  = this->_get_n_proc();
-                const int my_rank = this->_get_my_rank();
+                const int n_proc  = _mpi::get_n_proc();
+                const int my_rank = _mpi::get_rank();
 
                 this->_collect_buffer_info();
 

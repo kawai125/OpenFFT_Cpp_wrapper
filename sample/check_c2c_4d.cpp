@@ -6,55 +6,17 @@
 *   http://www.openmx-square.org/openfft/
 ******************************************************/
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <time.h>
-
-#include "color_printer.hpp"
+#include <cstdio>
+#include <cstdlib>
+#include <cmath>
+#include <ctime>
 
 #include "openfft.hpp"
 
+#include "color_printer.hpp"
+#include "test_tool.hpp"
+
 #define RANGE 4.5
-
-
-template <class T>
-void check_4d_array(const int n1, const int n2, const int n3, const int n4,
-                    const T *array_3d,
-                    const T *ref_arr  ){
-
-    int fail_count = 0;
-    for(int iw=0; iw<n1; ++iw){
-        for(int iz=0; iz<n2; ++iz){
-            for(int iy=0; iy<n3; ++iy){
-                for(int ix=0; ix<n4; ++ix){
-                    const int pos = iw*(n4*n3*n2)
-                                  + iz*(n4*n3)
-                                  + iy*(n4)
-                                  + ix;
-
-                    const auto elem = array_3d[pos];
-                    const auto ref  = ref_arr[pos];
-                    if( std::abs(elem.r - ref.r) > 0.001 ||
-                        std::abs(elem.i - ref.i) > 0.001   ){
-                        print_yellow("ERROR");
-                        printf(" array[%d,%d,%d,%d] data=(% 3.3f,% 3.3f), ref=(% 3.3f,% 3.3f)\n",
-                                iw, iz, iy, ix, elem.r, elem.i, ref.r, ref.i);
-                        ++fail_count;
-                    }
-                }
-            }
-        }
-    }
-    if(fail_count == 0){
-        print_green("   Check done.");
-        printf(     " All elements are correct.\n");
-    } else {
-        print_red(  "   Check failure.");
-        printf(     " Some elements are incorrect. failed = %d/%d points.\n",
-               fail_count, n1*n2*n3*n4);
-    }
-}
 
 
 int main(int argc, char* argv[])
@@ -65,11 +27,10 @@ int main(int argc, char* argv[])
     const int N3=5;
     const int N4=6;
     const int n_total = N1*N2*N3*N4;
-    int offt_measure,measure_time,print_memory;
+    int offt_measure, measure_time, print_memory;
     int i,j,k,m;
     double factor;
-    FILE *file_in;
-    char BUF[1000];
+
 
     OpenFFT::dcomplex Input[N1][N2][N3][N4];
     OpenFFT::dcomplex Out[N1][N2][N3][N4];
@@ -85,22 +46,34 @@ int main(int argc, char* argv[])
 
     /* Set global input */
 
-    file_in = fopen("check_c2c_4d.din","r");
-    fgets(BUF,sizeof(BUF),file_in);
-    fgets(BUF,sizeof(BUF),file_in);
-    fgets(BUF,sizeof(BUF),file_in);
-    fgets(BUF,sizeof(BUF),file_in);
-    for(m=0;m<N1;m++){
-        for(i=0;i<N2;i++){
-            for(j=0;j<N3;j++){
-                for(k=0;k<N4;k++){
-                    fgets(BUF,sizeof(BUF),file_in);
-                    sscanf(BUF,"%lf  %lf\n",&Input[m][i][j][k].r,&Input[m][i][j][k].i);
+    if( myid == 0){
+        char BUF[100];
+        FILE *file_in = fopen("check_c2c_4d.din","r");
+        if( file_in == nullptr ) throw std::logic_error("file not found.");
+
+        int m1, m2, m3, m4;
+        fgets(BUF,sizeof(BUF),file_in); sscanf(BUF, "%d\n", &m1);
+        fgets(BUF,sizeof(BUF),file_in); sscanf(BUF, "%d\n", &m2);
+        fgets(BUF,sizeof(BUF),file_in); sscanf(BUF, "%d\n", &m3);
+        fgets(BUF,sizeof(BUF),file_in); sscanf(BUF, "%d\n", &m4);
+
+        if(m1 != N1 || m2 != N2 || m3 != N3 || m4 != N4){
+            throw std::logic_error("the file format was differ.");
+        }
+
+        for(m=0;m<N1;m++){
+            for(i=0;i<N2;i++){
+                for(j=0;j<N3;j++){
+                    for(k=0;k<N4;k++){
+                        fgets(BUF,sizeof(BUF),file_in);
+                        sscanf(BUF,"%lf  %lf\n",&Input[m][i][j][k].r,&Input[m][i][j][k].i);
+                    }
                 }
             }
         }
+        fclose(file_in);
     }
-    fclose(file_in);
+    MPI_Bcast( &(Input[0][0][0][0]), n_total, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD );
 
     /* Select auto-tuning of communication */
 
@@ -131,6 +104,8 @@ int main(int argc, char* argv[])
     /* Allocate local input and output arrays */
 
     std::vector<OpenFFT::dcomplex> input_buffer, output_buffer;
+    input_buffer.reserve( My_Max_NumGrid);
+    output_buffer.reserve(My_Max_NumGrid);
     input_buffer.resize( My_NumGrid_In );
     output_buffer.resize(My_NumGrid_Out);
 
@@ -146,20 +121,26 @@ int main(int argc, char* argv[])
     fft_mngr.copy_4d_array_into_input_buffer( &(Input[0][0][0][0]) , input_buffer);
 
 
-    printf("myid=%4d: Input in the ABCD(XYZU) order with %d grid points",
-             myid, My_NumGrid_In);
-    if(My_NumGrid_In > 0){
-        printf("from (A=%d,B=%d,C=%d,D=%d) to (A=%d,B=%d,C=%d,D=%d)\n",
-                My_Index_In[0], My_Index_In[1], My_Index_In[2], My_Index_In[3],
-                My_Index_In[4], My_Index_In[5], My_Index_In[6], My_Index_In[7]);
-    }
-    else{
-        printf("\n");
+    MPI_Barrier(MPI_COMM_WORLD);
+    for(int i_proc=0; i_proc<numprocs; ++i_proc){
+        if(i_proc == myid){
+            printf("myid=%4d: Input in the ABCD(XYZU) order with %d grid points",
+                     myid, My_NumGrid_In);
+            if(My_NumGrid_In > 0){
+                printf("from (A=%d,B=%d,C=%d,D=%d) to (A=%d,B=%d,C=%d,D=%d)\n",
+                        My_Index_In[0], My_Index_In[1], My_Index_In[2], My_Index_In[3],
+                        My_Index_In[4], My_Index_In[5], My_Index_In[6], My_Index_In[7]);
+            }
+            else{
+                printf("\n");
+            }
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
     }
 
     /* FFT transform */
 
-    fft_mngr.fft_c2c_4d_forward( input_buffer.data(), output_buffer.data() );
+    fft_mngr.fft_c2c_4d_forward( input_buffer, output_buffer );
 
     /* Get local output */
 
@@ -213,88 +194,109 @@ int main(int argc, char* argv[])
 
     /* Print global output */
 
-    if(!myid){
+    if(myid == 0){
+        char BUF[100];
         sprintf(BUF,"check_c2c_4dx%d.dout",numprocs);
-        file_in = fopen(BUF,"w");
+        FILE *file_out = fopen(BUF,"w");
+        if( file_out == nullptr ) throw std::logic_error("failure to create file.");
         for(m=0;m<N1;m++){
             for(i=0;i<N2;i++){
                 for(j=0;j<N3;j++){
                     for(k=0;k<N4;k++){
-                        fprintf(file_in,"%10.3f  %10.3f\n",
+                        fprintf(file_out,"%10.3f  %10.3f\n",
                         Output[m][i][j][k].r,Output[m][i][j][k].i);
                     }
                 }
             }
         }
-        fclose(file_in);
+        fclose(file_out);
     }
 
-
-    if(!myid){
-        file_in = fopen("check_c2c_4d.dout","r");
+    if(myid == 0){
+        char BUF[100];
+        FILE *file_in = fopen("check_c2c_4d.dout","r");
+        if( file_in == nullptr ) throw std::logic_error("file not found.");
         for(m=0;m<N1;m++){
             for(i=0;i<N2;i++){
                 for(j=0;j<N3;j++){
                     for(k=0;k<N4;k++){
                         fgets(BUF,sizeof(BUF),file_in);
                         sscanf(BUF,"%lf  %lf\n",
-                        &Output_ref[m][i][j][k].r,&Output_ref[m][i][j][k].i);
+                                   &Output_ref[m][i][j][k].r, &Output_ref[m][i][j][k].i);
                     }
                 }
             }
         }
         fclose(file_in);
     }
+    MPI_Bcast( &(Output_ref[0][0][0][0]), n_total, MPI_DOUBLE_COMPLEX, 0, MPI_COMM_WORLD);
 
-    /* Error check */
 
-    if(!myid){
-        printf("\n");
-        print_green(" --- check FFT output");
-        printf(" ( using copy_4d_array_from_output_buffer() & MPI_Allreduce() )\n");
-        check_4d_array(N1, N2, N3, N4, &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
-    }
+    //==========================================================================
+    //  Gather results interface test
+    //==========================================================================
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf(     "\n");
+            print_green("[checking FFT output]\n");
+            printf(     "\n");
+            print_green(" -- using copy_4d_array_from_output_buffer() & MPI_Allreduce()\n");
+            TEST::check_4d_array(N1, N2, N3, N4,
+                                 &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
+        }
 
-    //------ copy local output buffer into 4D array data
-    fft_mngr.gather_4d_array( &(Output[0][0][0][0]) , output_buffer, 0);
+        if(myid == 0) printf(     "\n");
+        for(int i_proc=0; i_proc<numprocs; ++i_proc){
 
-    for(m=0;m<N1;m++){
-        for(i=0;i<N2;i++){
-            for(j=0;j<N3;j++){
-                for(k=0;k<N4;k++){
-                    Output[m][i][j][k].r /= factor;
-                    Output[m][i][j][k].i /= factor;
+            fft_mngr.gather_4d_array( &(Output[0][0][0][0]), output_buffer, i_proc );
+
+            MPI_Barrier(MPI_COMM_WORLD);
+            if(myid == i_proc){
+                print_green(" -- using Manager::gather_4d_array()");
+                printf(     " at proc=%d\n", i_proc);
+
+                for(m=0;m<N1;m++){
+                    for(i=0;i<N2;i++){
+                        for(j=0;j<N3;j++){
+                            for(k=0;k<N4;k++){
+                                Output[m][i][j][k].r /= factor;
+                                Output[m][i][j][k].i /= factor;
+                            }
+                        }
+                    }
+                }
+                TEST::check_4d_array(N1, N2, N3, N4,
+                                     &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
+
+
+        fft_mngr.allgather_4d_array( &(Output[0][0][0][0]), output_buffer );
+
+        for(m=0;m<N1;m++){
+            for(i=0;i<N2;i++){
+                for(j=0;j<N3;j++){
+                    for(k=0;k<N4;k++){
+                        Output[m][i][j][k].r /= factor;
+                        Output[m][i][j][k].i /= factor;
+                    }
                 }
             }
         }
-    }
 
-    if(myid == 0){
-        printf("\n");
-        print_green(" --- check FFT output");
-        printf(" ( using Manager::gather_4d_array() )\n");
-        check_4d_array(N1, N2, N3, N4, &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
-    }
-
-    //------ copy local output buffer into 4D array data
-    fft_mngr.allgather_4d_array( &(Output[0][0][0][0]) , output_buffer);
-
-    for(m=0;m<N1;m++){
-        for(i=0;i<N2;i++){
-            for(j=0;j<N3;j++){
-                for(k=0;k<N4;k++){
-                    Output[m][i][j][k].r /= factor;
-                    Output[m][i][j][k].i /= factor;
-                }
+        if(myid == 0) printf(     "\n");
+        MPI_Barrier(MPI_COMM_WORLD);
+        for(int i_proc=0; i_proc<numprocs; ++i_proc){
+            if(myid == i_proc){
+                print_green(" -- using Manager::allgather_4d_array()");
+                printf(     " at proc=%d\n", i_proc);
+                TEST::check_4d_array(N1, N2, N3, N4,
+                                     &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
             }
+            MPI_Barrier(MPI_COMM_WORLD);
         }
-    }
-
-    if(myid == 0){
-        printf("\n");
-        print_green(" --- check FFT output");
-        printf(" ( using Manager::allgather_4d_array() )\n");
-        check_4d_array(N1, N2, N3, N4, &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
     }
 
 
