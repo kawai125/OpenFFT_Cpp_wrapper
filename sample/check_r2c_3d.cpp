@@ -293,10 +293,130 @@ int main(int argc, char* argv[])
         MPI_Barrier(MPI_COMM_WORLD);
     }
 
-  /* Finalize OpenFFT */
+    //==========================================================================
+    //  functor interface test
+    //==========================================================================
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf("\n");
+            print_green("[functor interface test]\n");
+            printf("\n");
+            print_green(" -- check functor interface for input buffer\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
 
-  fft_mngr.finalize();
+        struct ReduceValue_R{
+            double v      = 0.0;
+            double factor = 1.0;
+            void operator () (const double arr_v, const double buf_v){
+                this->v += std::abs(arr_v * buf_v / this->factor);
+            }
+        };
+        ReduceValue_R reduce_value_r;
 
-  MPI_Finalize();
+        reduce_value_r.factor = factor;
+        fft_mngr.copy_3d_array_into_input_buffer( &(Input[0][0][0]), real_input_buffer);
+        const auto local_sum_ib = fft_mngr.apply_3d_array_with_input_buffer( &(Input[0][0][0]),
+                                                                              real_input_buffer,
+                                                                              reduce_value_r );
+
+        double sum_v_r;
+        double sum_v_r_ref;
+        MPI_Allreduce(&local_sum_ib.v, &sum_v_r, 1,
+                      MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+        sum_v_r_ref = 0.0;
+        for(i=0;i<N1;i++){
+            for(j=0;j<N2;j++){
+                for(k=0;k<N3;k++){
+                     sum_v_r_ref += std::abs( Input[i][j][k] * Input[i][j][k] / factor);
+                }
+            }
+        }
+
+        if(myid == 0){
+            bool check_flag = true;
+            if( std::abs(sum_v_r - sum_v_r_ref) > 0.0001 ){
+                check_flag = false;
+                print_yellow("  ERROR:");
+                printf(" reduced sum_v_r = % 6.5f, ref = % 6.5f\n",
+                       sum_v_r, sum_v_r_ref);
+            }
+
+            if( ! check_flag ){
+                print_red(  "        Check failure.");
+                printf(     " Some elements are incorrect.\n");
+            } else {
+                print_green("        Check done.");
+                printf(     " All elements are correct.\n");
+            }
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf("\n");
+            print_green(" -- check functor interface for output buffer\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        struct ReduceValue_C{
+            OpenFFT::dcomplex v {0.0, 0.0};
+            double            factor = 1.0;
+            void operator () (const OpenFFT::dcomplex arr_v, const OpenFFT::dcomplex buf_v){
+                this->v.r += std::abs(arr_v.r * buf_v.r / this->factor);
+                this->v.i += std::abs(arr_v.i * buf_v.i / this->factor);
+            }
+        };
+        ReduceValue_C reduce_value_c;
+
+        reduce_value_c.v.r    = 0.0;
+        reduce_value_c.v.i    = 0.0;
+        reduce_value_c.factor = factor;
+        const auto local_sum_ob = fft_mngr.apply_3d_array_with_output_buffer( &(Output[0][0][0]),
+                                                                              output_buffer,
+                                                                              reduce_value_c );
+
+        OpenFFT::dcomplex sum_v_c;
+        OpenFFT::dcomplex sum_v_c_ref;
+        MPI_Allreduce(&local_sum_ob.v, &sum_v_c, 1,
+                      MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
+
+        sum_v_c_ref.r = 0.0;
+        sum_v_c_ref.i = 0.0;
+        for(i=0;i<N1;i++){
+            for(j=0;j<N2;j++){
+                for(k=0;k<N3r;k++){
+                    sum_v_c_ref.r += std::abs( Output[i][j][k].r * Output[i][j][k].r);
+                    sum_v_c_ref.i += std::abs( Output[i][j][k].i * Output[i][j][k].i);
+                }
+            }
+        }
+
+        if(myid == 0){
+            bool check_flag = true;
+            if( std::abs(sum_v_c.r - sum_v_c_ref.r) > 0.0001 ||
+                std::abs(sum_v_c.i - sum_v_c_ref.i) > 0.0001   ){
+                check_flag = false;
+                print_yellow("  ERROR:");
+                printf(" reduced sum_v = (% 6.5f,% 6.5f), ref = (% 6.5f,% 6.5f)\n",
+                       sum_v_c.r, sum_v_c.i, sum_v_c_ref.r, sum_v_c_ref.i);
+            }
+
+            if( ! check_flag ){
+                print_red(  "        Check failure.");
+                printf(     " Some elements are incorrect.\n");
+            } else {
+                print_green("        Check done.");
+                printf(     " All elements are correct.\n");
+            }
+        }
+    }
+
+    /* Finalize OpenFFT */
+
+    fft_mngr.finalize();
+
+    MPI_Finalize();
 
 }

@@ -317,7 +317,7 @@ int main(int argc, char* argv[])
     }
 
     //==========================================================================
-    //  returning functor test
+    //  functor interface test
     //==========================================================================
     {
         MPI_Barrier(MPI_COMM_WORLD);
