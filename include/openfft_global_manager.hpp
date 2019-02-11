@@ -327,6 +327,12 @@ namespace OpenFFT {
                 return this->index_out_list[ i_proc];
             }
 
+            double get_time() const {
+                double t;
+                openfft_dtime(&t);
+                return t;
+            }
+
             //----------------------------------------------------------------------
             //    FFT & IFFT wrapper
             //----------------------------------------------------------------------

@@ -132,6 +132,9 @@ namespace OpenFFT {
         inline IndexList get_index_in(  const int i_proc) const { return _impl::fp64_global_mngr.get_index_in(  i_proc); }
         inline IndexList get_index_out( const int i_proc) const { return _impl::fp64_global_mngr.get_index_out( i_proc); }
 
+        //--- elapsed time
+        inline double get_time() const { return _impl::fp64_global_mngr.get_time(); }
+
         //----------------------------------------------------------------------
         //    FFT & IFFT wrapper
         //----------------------------------------------------------------------

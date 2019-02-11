@@ -139,7 +139,11 @@ This library is developed in the environment shown in below.
      int                My_NumGrid_Out = fft_mngr.get_n_grid_out();
      std::array<int, 8> My_Index_In    = fft_mngr.get_index_in();
      std::array<int, 8> My_Index_Out   = fft_mngr.get_index_out();
+
+     double             elapsed_time   = fft_mngr.get_time();
      ```
+
+     The values of [6] and [7] in "My_Index_In" and "My_Index_Out" are significant only at c2c_4D mode.
 
    - Get OpenFFT information of other process.  
      ```c++
@@ -259,10 +263,10 @@ This library is developed in the environment shown in below.
      int tgt_proc = 0;
      std::vector< std::array<int, 3> > index3d_seq;
 
-     fft_mngr.gen_3d_input_index_sequence(index3d_seq);
+     fft_mngr.gen_3d_input_index_sequence(index3d_seq);  //  for local proc.
      fft_mngr.gen_3d_output_index_sequence(index3d_seq);
 
-     fft_mngr.gen_3d_input_index_sequence(index3d_seq , tgt_proc);
+     fft_mngr.gen_3d_input_index_sequence(index3d_seq , tgt_proc);  //  for another proc
      fft_mngr.gen_3d_output_index_sequence(index3d_seq, tgt_proc);
 
      //--- usage sample for 3D array: make input buffer
@@ -275,23 +279,25 @@ This library is developed in the environment shown in below.
      }
 
 
+
+
      //--- for 4D array
      int tgt_proc = 0;
      std::vector< std::array<int, 4> > index4d_seq;
 
-     fft_mngr.gen_4d_input_index_sequence(index4d_seq);
+     fft_mngr.gen_4d_input_index_sequence(index4d_seq);  //  for local proc.
      fft_mngr.gen_4d_output_index_sequence(index4d_seq);
 
-     fft_mngr.gen_4d_input_index_sequence(index4d_seq , tgt_proc);
+     fft_mngr.gen_4d_input_index_sequence(index4d_seq , tgt_proc);  //  for another proc.
      fft_mngr.gen_4d_output_index_sequence(index4d_seq, tgt_proc);
 
      //--- usage sample for 4D array: copy from output buffer
      complex_t OutputArray4D[N1][N2][N3][N4];
      std::vector<complex_t> output_buffer;
-     input_buffer.reserve(My_Max_NumGrid);
-     input_buffer.clear();
+     output_buffer.reserve(My_Max_NumGrid);
+     output_buffer.clear();
 
-     /*  something calc with output_buffer */
+     fft_mngr.fft_c2c_4d_forward( input_buffer, output_buffer );
 
      for(size_t ii=0; ii<index4d_seq.size(); ++ii){
          const auto g = index4d_seq[ii];
