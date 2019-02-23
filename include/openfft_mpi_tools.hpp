@@ -254,6 +254,171 @@ namespace OpenFFT {
                 deserialize_vector_vector(recv_data, n_recv_disp, recv_vec_vec);
             }
 
+            //--- communicate implementations with static global buffer
+            template <class Tdata>
+            class CommImpl{
+                private:
+                    static std::vector<std::vector<Tdata>> mpi_send_buf;
+                    static std::vector<std::vector<Tdata>> mpi_recv_buf;
+
+                    static std::vector<int>   n_send;
+                    static std::vector<int>   n_send_disp;
+                    static std::vector<int>   n_recv;
+                    static std::vector<int>   n_recv_disp;
+                    static std::vector<Tdata> send_data;
+                    static std::vector<Tdata> recv_data;
+
+                public:
+                    void init(const int n_proc){
+                        mpi_send_buf.resize(n_proc);
+                        mpi_recv_buf.resize(n_proc);
+
+                        n_send.resize(n_proc);
+                        n_send_disp.resize(n_proc+1);
+                        n_recv.resize(n_proc);
+                        n_recv_disp.resize(n_proc+1);
+                    }
+                    void shrink_buf(const size_t sz = 4){
+                        const size_t n_proc = mpi_send_buf.size();
+
+                        send_data.resize(sz);
+                        recv_data.resize(sz);
+                        send_data.shrink_to_fit();
+                        recv_data.shrink_to_fit();
+
+                        for(size_t i_proc=0; i_proc<n_proc; ++i_proc){
+                            auto& sb = mpi_send_buf.at(i_proc);
+                            auto& rb = mpi_recv_buf.at(i_proc);
+
+                            sb.resize(sz);
+                            rb.resize(sz);
+                            sb.shrink_to_fit();
+                            rb.shrink_to_fit();
+                        }
+                    }
+
+                    std::vector<Tdata>&       get_send_buf(const int i_proc) const { return mpi_send_buf.at(i_proc); }
+                    const std::vector<Tdata>& get_recv_buf(const int i_proc) const { return mpi_recv_buf.at(i_proc); }
+
+                    void gather(const Tdata    *v_local,
+                                const size_t    n_local,
+                                const int       tgt_proc,
+                                      MPI_Comm  comm = MPI_COMM_WORLD){
+
+                        //--- make send buffer
+                        const int n_proc  = _mpi::get_n_proc(comm);
+                        const int my_rank = _mpi::get_rank(  comm);
+                        this->init(n_proc);
+
+                        MPI_Gather(&n_local  , 1, _mpi::MakeDataSize<int>(),
+                                   &n_recv[0], 1, _mpi::MakeDataSize<int>(),
+                                   tgt_proc, comm);
+
+                        n_recv_disp[0] = 0;
+                        for(int i=0; i<n_proc; ++i){
+                            n_recv_disp.at(i+1) = n_recv_disp.at(i) + n_recv.at(i);
+                        }
+                        recv_data.resize( n_recv_disp[n_proc] );
+
+
+                        MPI_Gatherv( v_local     ,  n_local  ,                  _mpi::MakeDataSize<Tdata>(),
+                                    &recv_data[0], &n_recv[0], &n_recv_disp[0], _mpi::MakeDataSize<Tdata>(),
+                                     tgt_proc, comm);
+
+                        if(my_rank != tgt_proc) return;
+
+                        //--- build recv_buf
+                        for(int i_proc=0; i_proc<n_proc; ++i_proc){
+                            auto& local_vec = mpi_recv_buf.at(i_proc);
+                                  local_vec.clear();
+                                  local_vec.reserve(n_recv.at(i_proc));
+
+                            const int index_begin = n_recv_disp.at(i_proc);
+                            const int index_end   = index_begin + n_recv.at(i_proc);
+                            for(int index=index_begin; index<index_end; ++index){
+                                local_vec.emplace_back( recv_data.at(index) );
+                            }
+                        }
+                    }
+                    void allgather(const Tdata    *v_local,
+                                   const size_t    n_local,
+                                         MPI_Comm  comm = MPI_COMM_WORLD){
+
+                        //--- make send buffer
+                        const int n_proc  = _mpi::get_n_proc(comm);
+                        this->init(n_proc);
+
+                        MPI_Allgather(&n_local  , 1, _mpi::MakeDataSize<int>(),
+                                      &n_recv[0], 1, _mpi::MakeDataSize<int>(),
+                                      comm);
+
+                        n_recv_disp[0] = 0;
+                        for(int i=0; i<n_proc; ++i){
+                            n_recv_disp.at(i+1) = n_recv_disp.at(i) + n_recv.at(i);
+                        }
+                        recv_data.resize( n_recv_disp[n_proc] );
+
+                        MPI_Allgatherv( v_local     , n_local   ,                  _mpi::MakeDataSize<Tdata>(),
+                                       &recv_data[0], &n_recv[0], &n_recv_disp[0], _mpi::MakeDataSize<Tdata>(),
+                                        comm);
+
+                        for(int i_proc=0; i_proc<n_proc; ++i_proc){
+                            auto& local_vec = mpi_recv_buf.at(i_proc);
+                                  local_vec.clear();
+                                  local_vec.reserve(n_recv.at(i_proc));
+
+                            const int index_begin = n_recv_disp.at(i_proc);
+                            const int index_end   = index_begin + n_recv.at(i_proc);
+                            for(int index=index_begin; index<index_end; ++index){
+                                local_vec.emplace_back( recv_data.at(index) );
+                            }
+                        }
+                    }
+
+                    void alltoall(MPI_Comm comm = MPI_COMM_WORLD){
+                        const int n_proc = _mpi::get_n_proc(comm);
+
+                        n_send_disp[0] = 0;
+                        for(int i=0; i<n_proc; ++i){
+                            n_send.at(i) = mpi_send_buf.at(i).size();
+                        }
+
+                        MPI_Alltoall(&n_send[0], 1, _mpi::MakeDataSize<int>(),
+                                     &n_recv[0], 1, _mpi::MakeDataSize<int>(),
+                                     comm);
+
+                        n_recv_disp[0] = 0;
+                        for(int i=0; i<n_proc; ++i){
+                            n_recv_disp.at(i+1) = n_recv_disp.at(i) + n_recv.at(i);
+                        }
+
+                        _mpi::serialize_vector_vector(mpi_send_buf, send_data, n_send_disp);
+                        recv_data.resize( n_recv_disp.back() );
+
+                        MPI_Alltoallv(&send_data[0], &n_send[0], &n_send_disp[0], _mpi::MakeDataSize<Tdata>(),
+                                      &recv_data[0], &n_recv[0], &n_recv_disp[0], _mpi::MakeDataSize<Tdata>(),
+                                       comm);
+
+                        _mpi::deserialize_vector_vector(recv_data, n_recv_disp, mpi_recv_buf);
+                    }
+            };
+            template <class Tdata>
+            std::vector<std::vector<Tdata>> CommImpl<Tdata>::mpi_send_buf;
+            template <class Tdata>
+            std::vector<std::vector<Tdata>> CommImpl<Tdata>::mpi_recv_buf;
+            template <class Tdata>
+            std::vector<int> CommImpl<Tdata>::n_send;
+            template <class Tdata>
+            std::vector<int> CommImpl<Tdata>::n_send_disp;
+            template <class Tdata>
+            std::vector<int> CommImpl<Tdata>::n_recv;
+            template <class Tdata>
+            std::vector<int> CommImpl<Tdata>::n_recv_disp;
+            template <class Tdata>
+            std::vector<Tdata> CommImpl<Tdata>::send_data;
+            template <class Tdata>
+            std::vector<Tdata> CommImpl<Tdata>::recv_data;
+
         }
     }
 }

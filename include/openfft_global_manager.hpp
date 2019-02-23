@@ -139,29 +139,6 @@ namespace OpenFFT {
         };
 
 
-        template <class Tdata>
-        class CommImpl{
-            private:
-                static std::vector<std::vector<Tdata>> mpi_send_buf;
-                static std::vector<std::vector<Tdata>> mpi_recv_buf;
-
-            public:
-                void init(const int n_proc){
-                    mpi_send_buf.resize(n_proc);
-                    mpi_recv_buf.resize(n_proc);
-                }
-
-                void gather_impl();
-                void allgather_impl();
-                void transpose_input_to_output_impl();
-                void transpose_output_to_input_impl();
-        };
-        template <class Tdata>
-        std::vector<std::vector<Tdata>> CommImpl<Tdata>::mpi_send_buf;
-        template <class Tdata>
-        std::vector<std::vector<Tdata>> CommImpl<Tdata>::mpi_recv_buf;
-
-
         /*
         *  @brief global manager for OpenFFT functions
         */
@@ -194,9 +171,6 @@ namespace OpenFFT {
             std::vector<int>       n_grid_out_list;
             std::vector<IndexList> index_in_list;
             std::vector<IndexList> index_out_list;
-
-            std::vector<std::vector<complex_t>> mpi_send_buf;
-            std::vector<std::vector<complex_t>> mpi_recv_buf;
 
             std::vector<std::vector<int>> convert_out_in_send_index;
             std::vector<std::vector<int>> convert_out_in_recv_index;
@@ -607,8 +581,9 @@ namespace OpenFFT {
             //----------------------------------------------------------------------
             //    transposer between output_buffer and input_buffer
             //----------------------------------------------------------------------
-            void transpose_input_to_output(const complex_t *input_buf,
-                                                 complex_t *output_buf){
+            template <class Tdata>
+            void transpose_input_to_output(const Tdata *input_buf,
+                                                 Tdata *output_buf){
 
                 this->_check_c2c_only();
 
@@ -619,9 +594,11 @@ namespace OpenFFT {
                 if(this->convert_in_out_mpi_flag){
                     //--- convert with MPI Alltoall
                     const int n_proc = _mpi::get_n_proc();
+                    _mpi::CommImpl<Tdata> comm_impl;
+                    comm_impl.init(n_proc);
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                        auto&       send_buf   = this->mpi_send_buf[i_proc];
+                        auto&       send_buf   = comm_impl.get_send_buf(i_proc);
                         const auto& send_index = this->convert_in_out_send_index[i_proc];
 
                         send_buf.clear();
@@ -632,10 +609,10 @@ namespace OpenFFT {
                         }
                     }
 
-                    _mpi::alltoall(this->mpi_send_buf, this->mpi_recv_buf);
+                    comm_impl.alltoall();
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                        const auto& recv_buf   = this->mpi_recv_buf[i_proc];
+                        const auto& recv_buf   = comm_impl.get_recv_buf(i_proc);
                         const auto& recv_index = this->convert_in_out_recv_index[i_proc];
 
                         for(size_t ii=0; ii<recv_index.size(); ++ii){
@@ -645,8 +622,12 @@ namespace OpenFFT {
                     }
                 } else {
                     //--- convert in local
+                    const int n_proc  = _mpi::get_n_proc();
                     const int my_rank = _mpi::get_rank();
-                    auto& send_buf = this->mpi_send_buf[my_rank];
+                    _mpi::CommImpl<Tdata> comm_impl;
+                    comm_impl.init(n_proc);
+
+                    auto& send_buf = comm_impl.get_send_buf(my_rank);
                     send_buf.clear();
 
                     const auto& send_index = this->convert_in_out_send_index[my_rank];
@@ -681,8 +662,9 @@ namespace OpenFFT {
                 }
             }
 
-            void transpose_output_to_input(const complex_t *output_buf,
-                                                 complex_t *input_buf ){
+            template <class Tdata>
+            void transpose_output_to_input(const Tdata *output_buf,
+                                                 Tdata *input_buf ){
 
                 this->_check_c2c_only();
 
@@ -693,9 +675,11 @@ namespace OpenFFT {
                 if(this->convert_out_in_mpi_flag){
                     //--- convert with MPI Alltoall
                     const int n_proc = _mpi::get_n_proc();
+                    _mpi::CommImpl<Tdata> comm_impl;
+                    comm_impl.init(n_proc);
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                        auto&       send_buf   = this->mpi_send_buf[i_proc];
+                        auto&       send_buf   = comm_impl.get_send_buf(i_proc);
                         const auto& send_index = this->convert_out_in_send_index[i_proc];
 
                         send_buf.clear();
@@ -706,10 +690,10 @@ namespace OpenFFT {
                         }
                     }
 
-                    _mpi::alltoall(this->mpi_send_buf, this->mpi_recv_buf);
+                    comm_impl.alltoall();
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                        const auto& recv_buf   = this->mpi_recv_buf[i_proc];
+                        const auto& recv_buf   = comm_impl.get_recv_buf(i_proc);
                         const auto& recv_index = this->convert_out_in_recv_index[i_proc];
 
                         for(size_t ii=0; ii<recv_index.size(); ++ii){
@@ -719,8 +703,12 @@ namespace OpenFFT {
                     }
                 } else {
                     //--- convert in local
+                    const int n_proc  = _mpi::get_n_proc();
                     const int my_rank = _mpi::get_rank();
-                    auto& send_buf = this->mpi_send_buf[my_rank];
+                    _mpi::CommImpl<Tdata> comm_impl;
+                    comm_impl.init(n_proc);
+
+                    auto& send_buf = comm_impl.get_send_buf(my_rank);
                     send_buf.clear();
 
                     const auto& send_index = this->convert_out_in_send_index[my_rank];
@@ -758,50 +746,39 @@ namespace OpenFFT {
             //----------------------------------------------------------------------
             //    gather inferface for global 3D/4D-array from output_buffer
             //----------------------------------------------------------------------
-            void gather_array(      complex_t *array,
-                              const complex_t *output_buf,
-                              const int        tgt_proc   ){
+            template <class Tdata>
+            void gather_array(      Tdata *array,
+                              const Tdata *output_buf,
+                              const int    tgt_proc   ){
 
                 //--- make send buffer
                 const int n_proc  = _mpi::get_n_proc();
                 const int my_rank = _mpi::get_rank();
 
-                auto& send_buf = this->mpi_send_buf[my_rank];
-                send_buf.resize(this->my_n_grid_out);
-                for(int ii=0; ii<this->my_n_grid_out; ++ii){
-                    send_buf[ii] = output_buf[ii];
-                }
-
-                //--- collect output buffers
-                _mpi::gather(send_buf, this->mpi_recv_buf, tgt_proc);
+                _mpi::CommImpl<Tdata> comm_impl;
+                comm_impl.gather(output_buf, this->my_n_grid_out, tgt_proc);
 
                 if(my_rank != tgt_proc) return;
 
                 //--- build array
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    const auto& recv_buf = this->mpi_recv_buf[i_proc];
+                    const auto& recv_buf = comm_impl.get_recv_buf(i_proc);
                     this->apply_array_with_output_buffer(array, recv_buf.data(), CopyFromBuffer{}, i_proc);
                 }
             }
-            void allgather_array(      complex_t *array,
-                                 const complex_t *output_buf){
+            template <class Tdata>
+            void allgather_array(      Tdata *array,
+                                 const Tdata *output_buf){
 
                 //--- make send buffer
                 const int n_proc  = _mpi::get_n_proc();
-                const int my_rank = _mpi::get_rank();
 
-                auto& send_buf = this->mpi_send_buf[my_rank];
-                send_buf.resize(this->my_n_grid_out);
-                for(int ii=0; ii<this->my_n_grid_out; ++ii){
-                    send_buf[ii] = output_buf[ii];
-                }
-
-                //--- collect output buffers
-                _mpi::allgather(send_buf, this->mpi_recv_buf);
+                _mpi::CommImpl<Tdata> comm_impl;
+                comm_impl.allgather(output_buf, this->my_n_grid_out);
 
                 //--- build array
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    const auto& recv_buf = this->mpi_recv_buf[i_proc];
+                    const auto& recv_buf = comm_impl.get_recv_buf(i_proc);
                     this->apply_array_with_output_buffer(array, recv_buf.data(), CopyFromBuffer{}, i_proc);
                 }
             }
@@ -1250,16 +1227,11 @@ namespace OpenFFT {
             }
 
             void _collect_buffer_info(){
-                const int n_proc = _mpi::get_n_proc();
-
                 //--- collect range info
                 _mpi::allgather(this->my_n_grid_in , this->n_grid_in_list );
                 _mpi::allgather(this->my_n_grid_out, this->n_grid_out_list);
                 _mpi::allgather(this->my_index_in  , this->index_in_list  );
                 _mpi::allgather(this->my_index_out , this->index_out_list );
-
-                this->mpi_send_buf.resize(n_proc);
-                this->mpi_recv_buf.resize(n_proc);
             }
 
             template <size_t Ndim>
@@ -1355,53 +1327,6 @@ namespace OpenFFT {
                         }
                     }
                 }
-
-                /*
-                //--- for in -> out convert
-                //------ make a projection of local input -> other output
-                index_in_seq.resize( this->get_n_grid_in() );
-                this->gen_input_index_sequence(  index_in_seq.data()  );
-                for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    index_out_seq.resize( this->get_n_grid_out(i_proc) );
-                    this->gen_output_index_sequence( index_out_seq.data(), i_proc );
-
-                    auto& send_in_out_index = this->convert_in_out_send_index[i_proc];
-                    send_in_out_index.clear();
-                    send_in_out_index.reserve(n_reserve);
-
-                    for(size_t ii=0; ii<index_in_seq.size(); ++ii){
-                        const auto index_in = index_in_seq[ii];
-                        for(size_t jj=0; jj<index_out_seq.size(); ++jj){
-                            if(index_in == index_out_seq[jj]){
-                                send_in_out_index.emplace_back(ii);
-                            }
-                        }
-                    }
-                }
-                */
-
-                /*
-                //------ make a projection of other input -> local output
-                index_out_seq.resize( this->get_n_grid_out() );
-                this->gen_output_index_sequence(  index_out_seq.data()  );
-                for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    index_in_seq.resize( this->get_n_grid_in(i_proc) );
-                    this->gen_input_index_sequence( index_in_seq.data(), i_proc );
-
-                    auto& recv_in_out_index = this->convert_in_out_recv_index[i_proc];
-                    recv_in_out_index.clear();
-                    recv_in_out_index.reserve(n_reserve);
-
-                    for(size_t ii=0; ii<index_in_seq.size(); ++ii){
-                        const auto index_in = index_in_seq[ii];
-                        for(size_t jj=0; jj<index_out_seq.size(); ++jj){
-                            if(index_in == index_out_seq[jj]){
-                                recv_in_out_index.emplace_back(jj);
-                            }
-                        }
-                    }
-                }
-                */
 
                 //--- check consistency
                 this->_check_convert_table();

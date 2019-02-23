@@ -413,9 +413,9 @@ namespace OpenFFT {
         //----------------------------------------------------------------------
         //    transposer between output_buffer and input_buffer
         //----------------------------------------------------------------------
-        template <class Alloc_L, class Alloc_R>
-        void transpose_input_to_output(const std::vector<complex_t, Alloc_L> &input_buf,
-                                             std::vector<complex_t, Alloc_R> &output_buf){
+        template <class Tdata, class Alloc_L, class Alloc_R>
+        void transpose_input_to_output(const std::vector<Tdata, Alloc_L> &input_buf,
+                                             std::vector<Tdata, Alloc_R> &output_buf){
 
             //--- check buffer size
             this->_check_buffer_length( input_buf, this->get_n_grid_in() );
@@ -423,13 +423,14 @@ namespace OpenFFT {
 
             this->transpose_input_to_output(input_buf.data(), output_buf.data());
         }
-        void transpose_input_to_output(const complex_t *input_buf,
-                                             complex_t *output_buf){
+        template <class Tdata>
+        void transpose_input_to_output(const Tdata *input_buf,
+                                             Tdata *output_buf){
             _impl::fp64_global_mngr.transpose_input_to_output(input_buf, output_buf);
         }
-        template <class Alloc_L, class Alloc_R>
-        void transpose_output_to_input(const std::vector<complex_t, Alloc_L> &output_buf,
-                                             std::vector<complex_t, Alloc_R> &input_buf ){
+        template <class Tdata, class Alloc_L, class Alloc_R>
+        void transpose_output_to_input(const std::vector<Tdata, Alloc_L> &output_buf,
+                                             std::vector<Tdata, Alloc_R> &input_buf ){
 
             //--- check buffer size
             this->_check_buffer_length( output_buf, this->get_n_grid_out() );
@@ -437,34 +438,37 @@ namespace OpenFFT {
 
             this->transpose_output_to_input(output_buf.data(), input_buf.data());
         }
-        void transpose_output_to_input(const complex_t *output_buf,
-                                             complex_t *input_buf ){
+        template <class Tdata>
+        void transpose_output_to_input(const Tdata *output_buf,
+                                             Tdata *input_buf ){
             _impl::fp64_global_mngr.transpose_output_to_input(output_buf, input_buf);
         }
 
         //----------------------------------------------------------------------
         //    gather inferface for global 3D/4D array from output_buffer
         //----------------------------------------------------------------------
-        template <class Alloc>
-        void gather_array(      complex_t                     *array,
-                          const std::vector<complex_t, Alloc> &output_buf,
-                          const int                            tgt_proc   ){
+        template <class Tdata, class Alloc>
+        void gather_array(      Tdata                     *array,
+                          const std::vector<Tdata, Alloc> &output_buf,
+                          const int                        tgt_proc   ){
             this->_check_buffer_length(output_buf, this->get_n_grid_out());
             this->gather_array(array, output_buf.data(), tgt_proc);
         }
-        void gather_array(      complex_t *array,
-                          const complex_t *output_buf,
-                          const int        tgt_proc   ){
+        template <class Tdata>
+        void gather_array(      Tdata *array,
+                          const Tdata *output_buf,
+                          const int    tgt_proc   ){
             _impl::fp64_global_mngr.gather_array(array, output_buf, tgt_proc);
         }
-        template <class Alloc>
-        void allgather_array(      complex_t                     *array,
-                             const std::vector<complex_t, Alloc> &output_buf ){
+        template <class Tdata, class Alloc>
+        void allgather_array(      Tdata                     *array,
+                             const std::vector<Tdata, Alloc> &output_buf ){
             this->_check_buffer_length(output_buf, this->get_n_grid_out());
             this->allgather_array(array, output_buf.data());
         }
-        void allgather_array(      complex_t *array,
-                             const complex_t *output_buf){
+        template <class Tdata>
+        void allgather_array(      Tdata *array,
+                             const Tdata *output_buf){
             _impl::fp64_global_mngr.allgather_array(array, output_buf);
         }
 
