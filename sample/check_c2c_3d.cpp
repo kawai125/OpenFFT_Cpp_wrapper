@@ -434,7 +434,7 @@ int main(int argc, char* argv[])
             std::vector<OpenFFT::dcomplex> in_out_convert_ref;
 
             in_out_convert_ref.resize( fft_mngr.get_n_grid_out() );
-            fft_mngr.apply_array_with_output_buffer( &(Input[0][0][0]), in_out_convert_ref, OpenFFT::CopyIntoBuffer{} );
+            fft_mngr.copy_array_into_output_buffer( &(Input[0][0][0]), in_out_convert_ref );
 
             fft_mngr.copy_array_into_input_buffer( &(Input[0][0][0]), input_buf );
 
@@ -465,7 +465,7 @@ int main(int argc, char* argv[])
             fft_mngr.copy_array_into_input_buffer( &(Output[0][0][0]), out_in_convert_ref );
 
             output_buf.resize( fft_mngr.get_n_grid_out() );
-            fft_mngr.apply_array_with_output_buffer( &(Output[0][0][0]), output_buf, OpenFFT::CopyIntoBuffer{} );
+            fft_mngr.copy_array_into_output_buffer( &(Output[0][0][0]), output_buf );
 
             fft_mngr.transpose_output_to_input(output_buf, out_in_convert);
 
@@ -601,7 +601,7 @@ int main(int argc, char* argv[])
 
                 std::vector<OpenFFT::dcomplex> buf, buf_ref;
                 buf_ref.resize( fft_mngr.get_n_grid_out() );
-                fft_mngr.apply_array_with_output_buffer( &(Output[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{} );
+                fft_mngr.copy_array_into_output_buffer( &(Output[0][0][0]), buf_ref );
 
                 print_green("    Manager<>::gen_output_index_sequence()\n");
 

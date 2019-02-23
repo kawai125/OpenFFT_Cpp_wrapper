@@ -469,7 +469,7 @@ int main(int argc, char* argv[])
 
                 std::vector<OpenFFT::dcomplex> buf, buf_ref;
                 buf_ref.resize( fft_mngr.get_n_grid_out() );
-                fft_mngr.apply_array_with_output_buffer( &(Output[0][0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{} );
+                fft_mngr.copy_array_into_output_buffer( &(Output[0][0][0][0]), buf_ref );
 
                 print_green("    Manager<>::gen_output_index_sequence()\n");
 

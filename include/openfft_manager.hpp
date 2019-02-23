@@ -221,6 +221,20 @@ namespace OpenFFT {
                                                 T_buf *buffer) const {
             this->apply_array_with_input_buffer(array, buffer, CopyIntoBuffer{});
         }
+        template <class T_arr,
+                  class T_buf, class Alloc_buf>
+        void copy_array_from_input_buffer(      T_arr                         *array,
+                                          const std::vector<T_buf, Alloc_buf> &buffer) const {
+            this->_check_buffer_length(buffer, this->get_n_grid_in());
+            const T_buf* buf_ptr = buffer.data();
+            this->copy_array_from_input_buffer(array, buf_ptr);
+        }
+        template <class T_arr,
+                  class T_buf >
+        void copy_array_from_input_buffer(      T_arr *array,
+                                          const T_buf *buffer) const {
+            this->apply_array_with_input_buffer(array, buffer, CopyFromBuffer{});
+        }
 
         template <class T_arr,
                   class T_buf, class Alloc_buf,
@@ -286,6 +300,19 @@ namespace OpenFFT {
         //    output buffer manipulator
         //----------------------------------------------------------------------
         //--- at local process
+        template <class T_arr,
+                  class T_buf, class Alloc_buf>
+        void copy_array_into_output_buffer(const T_arr                         *array,
+                                                 std::vector<T_buf, Alloc_buf> &buffer) const {
+            buffer.resize(this->get_n_grid_out());
+            this->copy_array_into_output_buffer(array, buffer.data());
+        }
+        template <class T_arr,
+                  class T_buf >
+        void copy_array_into_output_buffer(const T_arr *array,
+                                                 T_buf *buffer) const {
+            this->apply_array_with_output_buffer(array, buffer, CopyIntoBuffer{});
+        }
         template <class T_arr,
                   class T_buf, class Alloc_buf>
         void copy_array_from_output_buffer(      T_arr                         *array,

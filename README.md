@@ -58,25 +58,31 @@ This library is developed in the environment shown in below.
    //--- initialize for c2c 4D FFT
    fft_mngr.init_c2c_4d(N1, N2, N3, N4,
                         offt_measure, measure_time, print_memory);
+
+
+   //--- initialize for c2c_3D FFT with default settings
+   //      auto-tuning, without measure-time and print-memory.
+   fft_mngr.init_c2c_3d(N1, N2, N3);
    ```
-   These grid size and transform type are shared in global manager (that is static instance in this wrapper). You can select each one configuration exclusively in same time. (re-initialize to different configuration is possible.)
+   These grid size and transform type are shared in global manager (that is static instance in this wrapper).  
+   You can select each one configuration exclusively in same time. (re-initialize to different configuration is possible.)
 
   - Step 2: Copy the global 3D/4D array into the local input buffer.  
     ```c++
     //--- copy data for r2c 3D FFT
     double RealGlobalInput[N1][N2][N3];
     std::vector<double> real_input_buffer;
-    fft_mngr.copy_3d_array_into_input_buffer( &( RealGlobalInput[0][0][0] ), real_input_buffer );
+    fft_mngr.copy_array_into_input_buffer( &( RealGlobalInput[0][0][0] ), real_input_buffer );
 
     //--- copy data for c2c 3D FFT
     OpenFFT::dcomplex GlobalInput[N1][N2][N3];
     std::vector<OpenFFT::dcomplex> input_buffer;
-    fft_mngr.copy_3d_array_into_input_buffer( &( GlobalInput[0][0][0] ), input_buffer );
+    fft_mngr.copy_array_into_input_buffer( &( GlobalInput[0][0][0] ), input_buffer );
 
     //--- copy data for c2c 4D FFT
     OpenFFT::dcomplex GlobalInput[N1][N2][N3][N4];
     std::vector<OpenFFT::dcomplex> input_buffer;
-    fft_mngr.copy_4d_array_into_input_buffer( &( GlobalInput[0][0][0][0] ), input_buffer );
+    fft_mngr.copy_array_into_input_buffer( &( GlobalInput[0][0][0][0] ), input_buffer );
     ```
     All 'buffer' input/output accepts both of reference to `std::vector<T>` and pointer to buffer array (`double *` or `OpenFFT::dcomplex *`).  
     Using `std::vector<T>` is recommended because the buffer length is checked for input buffer or resized for output buffer in wrapper API.
@@ -85,41 +91,37 @@ This library is developed in the environment shown in below.
     ```c++
     //--- for r2c 3D FFT
     std::vector<OpenFFT::dcomplex> output_buffer;
-    fft_mngr.fft_r2c_3d_forward( real_input_buffer, output_buffer );
+    fft_mngr.fft_r2c_forward( real_input_buffer, output_buffer );
 
-    //--- for c2c 3D FFT
+    //--- for c2c 3D/4D FFT
     std::vector<OpenFFT::dcomplex> output_buffer;
-    fft_mngr.fft_c2c_3d_forward( input_buffer, output_buffer );
-
-    //--- for c2c 4D FFT
-    std::vector<OpenFFT::dcomplex> output_buffer;
-    fft_mngr.fft_c2c_4d_forward( input_buffer, output_buffer );
+    fft_mngr.fft_c2c_forward( input_buffer, output_buffer );
     ```
 
   - Step 4: write back the local output buffer data into the local 3D/4D array.  
     ```c++
     //--- write back for r2c 3D FFT
     OpenFFT::dcomplex LocalOutput[N1][N2][N3r];   // N3r = N3/2+1
-    fft_mngr.copy_3d_array_from_output_buffer( &( GlobalOutput[0][0][0] ), output_buffer);
+    fft_mngr.copy_array_from_output_buffer( &( GlobalOutput[0][0][0] ), output_buffer);
 
     //--- write back for c2c 3D FFT
     OpenFFT::dcomplex LocalOutput[N1][N2][N3];
-    fft_mngr.copy_3d_array_from_output_buffer( &( GlobalOutput[0][0][0] ), output_buffer);
+    fft_mngr.copy_array_from_output_buffer( &( GlobalOutput[0][0][0] ), output_buffer);
 
     //--- write back for c2c 4D FFT
     OpenFFT::dcomplex LocalOutput[N1][N2][N3][N4];
-    fft_mngr.copy_4d_array_from_output_buffer( &( GlobalOutput[0][0][0][0] ), output_buffer);
+    fft_mngr.copy_array_from_output_buffer( &( GlobalOutput[0][0][0][0] ), output_buffer);
     ```
 
-   - Step 4-2: Convert output buffer into input buffer for Inverse FFT (available in c2c_3D mode only).  
+   - Step 4-2: Transpose the output buffer into the input buffer for Inverse FFT (available in c2c_3D mode only).  
      ```c++
-     fft_mngr.convert_output_to_input( input_buffer, output_buffer );
+     fft_mngr.transpose_output_to_input( output_buffer, input_buffer );
      ```
-     In this function, communicate the data of 'output_buffer' by using MPI_Alltoallv() and shape received data into the 'input_buffer'.
+     In this function, communicate the data of 'output_buffer' by using MPI_Alltoallv() and reshape received data into the 'input_buffer'.
 
-   - Step 4-3: execute Inverse FFT (available in c2c_3D mode only).  
+   - Step 4-3: Execute Inverse FFT (available in c2c_3D mode only).  
      ```c++
-     fft_mngr.fft_c2c_3d_backward( input_buffer, output_buffer );
+     fft_mngr.fft_c2c_backward( input_buffer, output_buffer );
      ```
      This function is compatible with backward DFT compute of FFTW3.
 
@@ -160,22 +162,36 @@ This library is developed in the environment shown in below.
      //--- gather for r2c 3D FFT and c2c 3D FFT
      OpenFFT::dcomplex GlobalOutput[N1][N2][N3];
      const int tgt_proc = 0; // MPI proc id
-     fft_mngr.gather_3d_array( &( GlobalOutput[0][0][0] ), output_buffer, tgt_proc );
+     fft_mngr.gather_array( &( GlobalOutput[0][0][0] ), output_buffer, tgt_proc );
 
      //--- gather for c2c 4D FFT
      OpenFFT::dcomplex GlobalOutput[N1][N2][N3][N4];
      const int tgt_proc = 0; // MPI proc id
-     fft_mngr.gather_4d_array( &( GlobalOutput[0][0][0][0] ), output_buffer, tgt_proc );
+     fft_mngr.gather_array( &( GlobalOutput[0][0][0][0] ), output_buffer, tgt_proc );
 
 
      //--- allgather for r2c 3D FFT and c2c 3D FFT
      OpenFFT::dcomplex GlobalOutput[N1][N2][N3];
-     fft_mngr.allgather_3d_array( &( GlobalOutput[0][0][0] ), output_buffer );
+     fft_mngr.allgather_array( &( GlobalOutput[0][0][0] ), output_buffer );
 
      //--- allgather for c2c 4D FFT
      OpenFFT::dcomplex GlobalOutput[N1][N2][N3][N4];
-     fft_mngr.allgather_4d_array( &( GlobalOutput[0][0][0][0] ), output_buffer );
+     fft_mngr.allgather_array( &( GlobalOutput[0][0][0][0] ), output_buffer );
+
+
+
+     //--- gather user-defined data type (c2c_3D example)
+     struct YourData {
+         // define anything your data.
+         // (notice: this class will be transported with MPI function.
+         //          be careful if this class contains pointer or reference member.)
+     };
+     std::vector<YoutData> your_output;
+     Yourdata YourGlobalOutput[N1][N2][N3];
+
+     fft_mngr.gather_array( &( YourGlobalOutput[0][0][0] ), your_output, tgt_proc );
      ```
+     These 'gather' functions accept any type of 3D/4D array and buffer (defined as template class).
 
    - Apply your function between global 3D/4D array and local input/output buffer.  
      ```c++
@@ -190,7 +206,7 @@ This library is developed in the environment shown in below.
      };
      CopyRealpartFromBuffer your_func;
 
-     fft_mngr.apply_3d_array_with_output_buffer( &(RealGlobalOutput[0][0][0]), output_buffer, your_func );
+     fft_mngr.apply_array_with_output_buffer( &(RealGlobalOutput[0][0][0]), output_buffer, your_func );
 
 
 
@@ -199,9 +215,9 @@ This library is developed in the environment shown in below.
      std::vector<OpenFFT::dcomplex> output_buffer_at_proc_i;
 
      //------- this API accepts explicit MPI process ID.
-     fft_mngr.apply_3d_array_with_output_buffer( &(RealGlobalOutput[0][0][0]), output_buffer_at_proc_i, your_func, proc_i);
+     fft_mngr.apply_array_with_output_buffer( &(RealGlobalOutput[0][0][0]), output_buffer_at_proc_i, your_func, proc_i);
      ```
-     The implementations of `OpenFFT::Manager<>::apply_[3d/4d]_array_with_[input/output]_buffer()` are used in other API between global 3D/4D array and local buffer. These 'apply' functions can accept explicit MPI process ID.
+     The implementations of `OpenFFT::Manager<>::apply_array_with_[input/output]_buffer()` are used in other API between global 3D/4D array and local buffer. These 'apply' functions can accept explicit MPI process ID.
 
      These 'apply' functions return the functor that you passed. It can use for reducing value from local buffer.  
      ```c++
@@ -219,7 +235,7 @@ This library is developed in the environment shown in below.
      ReduceValue reduce_value;
 
      //--- get local sum
-     const ReduceValue local_sum = fft_mngr.apply_3d_array_with_output_buffer( &(ApplyMatrix[0][0][0]), output_buffer, reduce_value );
+     const ReduceValue local_sum = fft_mngr.apply_array_with_output_buffer( &(ApplyMatrix[0][0][0]), output_buffer, reduce_value );
 
      //--- get global sum
      double global_sum;
@@ -241,8 +257,8 @@ This library is developed in the environment shown in below.
      //--- something function between ArrayClass and BufferClass
      struct ApplyFunc {
          void operator () (ArrayClass &arr_v, const BufferClass buf_v){
-             arr_v.v =  buf_v.c.r * (double)buf_v.j
-                     +  buf_v.c.i * (double)buf_v.k;
+             arr_v.v =  buf_v.c.r * static_cast<double>(buf_v.j)
+                     +  buf_v.c.i * static_cast<double>(buf_v.k);
              arr_v.m = buf_v.j - buf_v.k;
          }
      };
@@ -252,9 +268,9 @@ This library is developed in the environment shown in below.
      std::vector<BufferClass> apply_buffer;
 
      //--- apply your function (select as index pattern)
-     fft_mngr.apply_3d_array_with_input_buffer(  &(array_3d[0][0][0]), apply_buffer, apply_func );
+     fft_mngr.apply_array_with_input_buffer(  &(array_3d[0][0][0]), apply_buffer, apply_func );
      //  or
-     fft_mngr.apply_3d_array_with_output_buffer( &(array_3d[0][0][0]), apply_buffer, apply_func );
+     fft_mngr.apply_array_with_output_buffer( &(array_3d[0][0][0]), apply_buffer, apply_func );
      ```
 
    - Index sequence generator for input/output buffer.
@@ -263,11 +279,11 @@ This library is developed in the environment shown in below.
      int tgt_proc = 0;
      std::vector< std::array<int, 3> > index3d_seq;
 
-     fft_mngr.gen_3d_input_index_sequence(index3d_seq);  //  for local proc.
-     fft_mngr.gen_3d_output_index_sequence(index3d_seq);
+     fft_mngr.gen_input_index_sequence(index3d_seq);  //  for local proc.
+     fft_mngr.gen_output_index_sequence(index3d_seq);
 
-     fft_mngr.gen_3d_input_index_sequence(index3d_seq , tgt_proc);  //  for another proc
-     fft_mngr.gen_3d_output_index_sequence(index3d_seq, tgt_proc);
+     fft_mngr.gen_input_index_sequence(index3d_seq , tgt_proc);  //  for another proc
+     fft_mngr.gen_output_index_sequence(index3d_seq, tgt_proc);
 
      //--- usage sample for 3D array: make input buffer
      complex_t InputArray3D[N1][N2][N3];
@@ -280,16 +296,15 @@ This library is developed in the environment shown in below.
 
 
 
-
      //--- for 4D array
      int tgt_proc = 0;
      std::vector< std::array<int, 4> > index4d_seq;
 
-     fft_mngr.gen_4d_input_index_sequence(index4d_seq);  //  for local proc.
-     fft_mngr.gen_4d_output_index_sequence(index4d_seq);
+     fft_mngr.gen_input_index_sequence(index4d_seq);  //  for local proc.
+     fft_mngr.gen_output_index_sequence(index4d_seq);
 
-     fft_mngr.gen_4d_input_index_sequence(index4d_seq , tgt_proc);  //  for another proc.
-     fft_mngr.gen_4d_output_index_sequence(index4d_seq, tgt_proc);
+     fft_mngr.gen_input_index_sequence(index4d_seq , tgt_proc);  //  for another proc.
+     fft_mngr.gen_output_index_sequence(index4d_seq, tgt_proc);
 
      //--- usage sample for 4D array: copy from output buffer
      complex_t OutputArray4D[N1][N2][N3][N4];
@@ -297,7 +312,7 @@ This library is developed in the environment shown in below.
      output_buffer.reserve(My_Max_NumGrid);
      output_buffer.clear();
 
-     fft_mngr.fft_c2c_4d_forward( input_buffer, output_buffer );
+     fft_mngr.fft_c2c_forward( input_buffer, output_buffer );
 
      for(size_t ii=0; ii<index4d_seq.size(); ++ii){
          const auto g = index4d_seq[ii];
@@ -307,10 +322,23 @@ This library is developed in the environment shown in below.
 
      These APIs are useful to make the data part in local process.
 
-   - Display parameters for `convert_output_to_input()` (available in c2c_3D mode only).  
+   - Transpose functions with user-defined data class.
      ```c++
-     fft_mngr.report_convert_matrix();
+     struct YourData {
+         // define anything your data.
+         // (notice: this class will be transported with MPI function.
+         //          be careful if this class contains pointer or reference member.)
+     };
+
+     std::vector<YourData> input_buf, output_buf;
+
+     //--- transpose input_buf -> output buf
+     fft_mngr.transpose_input_to_output(input_buf, output_buf);
+
+     //--- transpose output_buf -> input_buf
+     fft_mngr.transpose_output_to_input(output_buf, input_buf);
      ```
+     These 'transpose' functions accept any type of buffer (defined as template class).
 
 ## Note
 Makefile configuration example for OpenFFT library.  
