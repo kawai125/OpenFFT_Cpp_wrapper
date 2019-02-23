@@ -38,8 +38,24 @@ namespace TEST {
         return true;
     }
 
+    struct Result {
+        int n_test    = 0;
+        int n_failure = 0;
+
+        void clear(){
+            this->n_test    = 0;
+            this->n_failure = 0;
+        }
+        void operator += (const bool result){
+            this->n_test    += 1;
+            if( !result ){
+                this->n_failure += 1;
+            }
+        }
+    };
+
     template <class T>
-    void check_3d_array(const int n1, const int n2, const int n3,
+    bool check_3d_array(const int n1, const int n2, const int n3,
                         const T *array_3d,
                         const T *ref_arr  ){
 
@@ -68,14 +84,17 @@ namespace TEST {
         if( ! check_flag ){
             oss_red(oss,   "        Check failure.");
             oss << " Some elements are incorrect\n";
+            std::cout << oss.str() << std::flush;
+            return false;
         } else {
             oss_green(oss, "        Check done.");
             oss << " All elements are correct\n";
+            std::cout << oss.str() << std::flush;
+            return true;
         }
-        std::cout << oss.str() << std::flush;
     }
     template <class T>
-    void check_buffer(const int  n_grid,
+    bool check_buffer(const int  n_grid,
                       const T   *buf,
                       const T   *buf_ref,
                       const int  my_rank ){
@@ -97,16 +116,19 @@ namespace TEST {
         if( ! check_flag ){
             oss_red(oss,   "        Check failure.");
             oss << " Some elements are incorrect at proc=" << my_rank << "\n";
+            std::cout << oss.str() << std::flush;
+            return false;
         } else {
             oss_green(oss, "        Check done.");
             oss << " All elements are correct at proc=" << my_rank << "\n";
+            std::cout << oss.str() << std::flush;
+            return true;
         }
-        std::cout << oss.str() << std::flush;
     }
 
 
     template <class T>
-    void check_4d_array(const int n1, const int n2, const int n3, const int n4,
+    bool check_4d_array(const int n1, const int n2, const int n3, const int n4,
                         const T *array_4d,
                         const T *ref_arr  ){
 
@@ -136,11 +158,44 @@ namespace TEST {
         if(fail_count == 0){
             print_green("        Check done.");
             printf(     " All elements are correct.\n");
+            return true;
         } else {
             print_red(  "        Check failure.");
             printf(     " Some elements are incorrect. failed = %d/%d points.\n",
                    fail_count, n1*n2*n3*n4);
+            return false;
         }
+    }
+
+    int report(const Result res){
+        int myid, numprocs;
+        MPI_Comm_rank(MPI_COMM_WORLD,&myid);
+        MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
+
+        int final = 0;
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf("\n");
+            print_green("[test result]\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        for(int i_proc=0; i_proc<numprocs; ++i_proc){
+            MPI_Barrier(MPI_COMM_WORLD);
+            if(myid == i_proc){
+                if(res.n_failure <= 0){
+                    print_green("  [All tests passed]");
+                } else {
+                    print_red(  "  [" + std::to_string(res.n_failure)
+                                + "/" + std::to_string(res.n_test) + " tests were failed]");
+                    final = 1;
+                }
+                printf(" at proc=%d\n", myid);
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
+
+        return final;
     }
 
 }

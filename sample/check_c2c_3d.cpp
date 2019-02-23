@@ -28,6 +28,8 @@ int main(int argc, char* argv[])
     OpenFFT::dcomplex Input[N1][N2][N3],Output[N1][N2][N3];
     OpenFFT::dcomplex Out[N1][N2][N3]  ,Output_ref[N1][N2][N3];
 
+    TEST::Result test_result;
+
     /* MPI */
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
@@ -81,9 +83,6 @@ int main(int argc, char* argv[])
     const auto My_NumGrid_Out = fft_mngr.get_n_grid_out();
     const auto My_Index_Out   = fft_mngr.get_index_out();
 
-    //--- report internal table info (used for Manager<>::convert_output_to_input() function)
-    // fft_mngr.report_convert_matrix();
-
     /* Set local input */
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -134,14 +133,14 @@ int main(int argc, char* argv[])
     std::fill( output_buffer.begin(), output_buffer.end(), OpenFFT::dcomplex{0.0, 0.0} );
 
     //------ copy 3D array data into local input buffer
-    fft_mngr.copy_3d_array_into_input_buffer( &(Input[0][0][0]) , input_buffer);
+    fft_mngr.copy_array_into_input_buffer( &(Input[0][0][0]) , input_buffer);
 
 
     /* FFT transform */
 
     //------ call exec fft through OpenFFT::Manager
     //          "buffer" argument accepts std::vector<OpenFFT::dcomplex> or pointer <OpenFFT::dcomplex*>.
-    fft_mngr.fft_c2c_3d_forward(input_buffer, output_buffer);
+    fft_mngr.fft_c2c_forward(input_buffer, output_buffer);
 
 
     /* Get local output */
@@ -177,7 +176,7 @@ int main(int argc, char* argv[])
     }
 
     //------ local output buffer into 3D-array
-    fft_mngr.copy_3d_array_from_output_buffer( &(Out[0][0][0]) , output_buffer);
+    fft_mngr.copy_array_from_output_buffer( &(Out[0][0][0]) , output_buffer);
 
     for(i=0;i<N1;i++){
         for(j=0;j<N2;j++){
@@ -198,7 +197,7 @@ int main(int argc, char* argv[])
     };
     CopyFromBufferWithCalc copy_from_buffer_with_calc;
     copy_from_buffer_with_calc.n_inv_sqrt = 1.0/factor;
-    fft_mngr.apply_3d_array_with_output_buffer( &(Out[0][0][0]),
+    fft_mngr.apply_array_with_output_buffer( &(Out[0][0][0]),
                                                output_buffer,
                                                copy_from_buffer_with_calc);
     */
@@ -262,19 +261,19 @@ int main(int argc, char* argv[])
             printf(     "\n");
             print_green("[checking FFT output]\n");
             printf(     "\n");
-            print_green(" -- using copy_3d_array_from_output_buffer() & MPI_Allreduce()\n");
-            TEST::check_3d_array(N1, N2, N3,
-                                 &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+            print_green("   Manager<>::copy_array_from_output_buffer() & MPI_Allreduce()\n");
+            test_result += TEST::check_3d_array(N1, N2, N3,
+                                                &(Output[0][0][0]), &(Output_ref[0][0][0]) );
             printf(     "\n");
         }
         MPI_Barrier(MPI_COMM_WORLD);
 
         for(int i_proc=0; i_proc<numprocs; ++i_proc){
-            fft_mngr.gather_3d_array( &(Output[0][0][0]), output_buffer, i_proc );
+            fft_mngr.gather_array( &(Output[0][0][0]), output_buffer, i_proc );
 
             MPI_Barrier(MPI_COMM_WORLD);
             if(myid == i_proc){
-                print_green(" -- using Manager::gather_3d_array()");
+                print_green("   Manager<>::gather_array()");
                 printf(     " at proc=%d\n", i_proc);
 
                 for(i=0;i<N1;i++){
@@ -286,8 +285,8 @@ int main(int argc, char* argv[])
                     }
                 }
 
-                TEST::check_3d_array(N1, N2, N3,
-                                     &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+                test_result += TEST::check_3d_array(N1, N2, N3,
+                                                    &(Output[0][0][0]), &(Output_ref[0][0][0]) );
             }
             MPI_Barrier(MPI_COMM_WORLD);
         }
@@ -295,10 +294,10 @@ int main(int argc, char* argv[])
 
         if(myid == 0){
             printf(     "\n");
-            print_green(" -- using Manager::allgather_3d_array() )\n");
+            print_green("   Manager<>::allgather_array() )\n");
         }
 
-        fft_mngr.allgather_3d_array( &(Output[0][0][0]), output_buffer );
+        fft_mngr.allgather_array( &(Output[0][0][0]), output_buffer );
 
         for(i=0;i<N1;i++){
             for(j=0;j<N2;j++){
@@ -310,8 +309,8 @@ int main(int argc, char* argv[])
         }
 
         if(myid == 0){
-            TEST::check_3d_array(N1, N2, N3,
-                                 &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+            test_result += TEST::check_3d_array(N1, N2, N3,
+                                               &(Output[0][0][0]), &(Output_ref[0][0][0]) );
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
@@ -354,10 +353,10 @@ int main(int argc, char* argv[])
         ReduceValue reduce_value;
 
         reduce_value.factor = 1.0;
-        fft_mngr.copy_3d_array_into_input_buffer( &(Input[0][0][0]), input_buffer);
-        const auto local_sum_ib = fft_mngr.apply_3d_array_with_input_buffer( &(Output[0][0][0]),
-                                                                              input_buffer,
-                                                                              reduce_value );
+        fft_mngr.copy_array_into_input_buffer( &(Input[0][0][0]), input_buffer);
+        const auto local_sum_ib = fft_mngr.apply_array_with_input_buffer( &(Output[0][0][0]),
+                                                                            input_buffer,
+                                                                            reduce_value );
 
         MPI_Allreduce(&local_sum_ib.v, &sum_v, 1,
                       MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
@@ -391,9 +390,9 @@ int main(int argc, char* argv[])
         reduce_value.v.r    = 0.0;
         reduce_value.v.i    = 0.0;
         reduce_value.factor = factor;
-        const auto local_sum_ob = fft_mngr.apply_3d_array_with_output_buffer( &(Input[0][0][0]),
-                                                                              output_buffer,
-                                                                              reduce_value );
+        const auto local_sum_ob = fft_mngr.apply_array_with_output_buffer( &(Input[0][0][0]),
+                                                                             output_buffer,
+                                                                             reduce_value );
 
         MPI_Allreduce(&local_sum_ob.v, &sum_v, 1,
                       MPI_DOUBLE_COMPLEX, MPI_SUM, MPI_COMM_WORLD);
@@ -419,62 +418,97 @@ int main(int argc, char* argv[])
     }
 
     //==========================================================================
-    //  inverse FFT test
+    //  transpose function test
     //==========================================================================
     {
-        OpenFFT::dcomplex IFFT_Output[N1][N2][N3];
-
         MPI_Barrier(MPI_COMM_WORLD);
         if(myid == 0){
             printf("\n");
-            print_green("[Inverse FFT test]\n");
+            print_green("[transpose function test]\n");
+            printf("\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        {
+            std::vector<OpenFFT::dcomplex> input_buf;
+            std::vector<OpenFFT::dcomplex> in_out_convert;
+            std::vector<OpenFFT::dcomplex> in_out_convert_ref;
+
+            in_out_convert_ref.resize( fft_mngr.get_n_grid_out() );
+            fft_mngr.apply_array_with_output_buffer( &(Input[0][0][0]), in_out_convert_ref, OpenFFT::CopyIntoBuffer{} );
+
+            fft_mngr.copy_array_into_input_buffer( &(Input[0][0][0]), input_buf );
+
+            fft_mngr.transpose_input_to_output(input_buf, in_out_convert);
+
+            MPI_Barrier(MPI_COMM_WORLD);
+            for(int i_proc=0; i_proc<numprocs; ++i_proc){
+                MPI_Barrier(MPI_COMM_WORLD);
+                if(i_proc == myid){
+                    std::ostringstream oss;
+                    oss_green(oss, "   Manager<>::transpose_input_to_output()");
+                    oss << " at proc=" << myid << "\n";
+                    printf(oss.str().c_str());
+
+                    test_result += TEST::check_buffer(fft_mngr.get_n_grid_out(),
+                                                      in_out_convert.data(),
+                                                      in_out_convert_ref.data(), myid );
+                }
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
+        }
+        if(myid == 0) printf("\n");
+        {
+            std::vector<OpenFFT::dcomplex> output_buf;
+            std::vector<OpenFFT::dcomplex> out_in_convert;
+            std::vector<OpenFFT::dcomplex> out_in_convert_ref;
+
+            fft_mngr.copy_array_into_input_buffer( &(Output[0][0][0]), out_in_convert_ref );
+
+            output_buf.resize( fft_mngr.get_n_grid_out() );
+            fft_mngr.apply_array_with_output_buffer( &(Output[0][0][0]), output_buf, OpenFFT::CopyIntoBuffer{} );
+
+            fft_mngr.transpose_output_to_input(output_buf, out_in_convert);
+
+            MPI_Barrier(MPI_COMM_WORLD);
+            for(int i_proc=0; i_proc<numprocs; ++i_proc){
+                MPI_Barrier(MPI_COMM_WORLD);
+                if(i_proc == myid){
+                    std::ostringstream oss;
+                    oss_green(oss, "   Manager<>::convert_output_to_input()");
+                    oss << " at proc=" << myid << "\n";
+                    printf(oss.str().c_str());
+
+                    test_result += TEST::check_buffer(fft_mngr.get_n_grid_in(),
+                                                      out_in_convert.data(),
+                                                      out_in_convert_ref.data(), myid );
+                }
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
+        }
+    }
+
+    //==========================================================================
+    //  inverse FFT test
+    //==========================================================================
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf("\n");
+            print_green("[inverse FFT test]\n");
             printf("\n");
         }
         MPI_Barrier(MPI_COMM_WORLD);
 
+        OpenFFT::dcomplex IFFT_Output[N1][N2][N3];
+
         //--- convert output buffer into input buffer.
-        fft_mngr.convert_output_to_input(input_buffer, output_buffer);
-
-
-        //--- check converted input_buffer
-        std::vector<OpenFFT::dcomplex> ifft_input_buffer_ref;
-
-        //------ this API automatically resize std::vector<>
-        fft_mngr.copy_3d_array_into_input_buffer( &(Output[0][0][0]), ifft_input_buffer_ref );
-        //------ cancel "factor"
-        for(auto& elem : ifft_input_buffer_ref){
-            elem.r *= factor;
-            elem.i *= factor;
-        }
-
-        MPI_Barrier(MPI_COMM_WORLD);
-        for(int i_proc=0; i_proc<numprocs; ++i_proc){
-            if(i_proc == myid){
-                std::ostringstream oss;
-                oss_green(oss, " -- check converted input buffer for Inverse FFT");
-                oss << " at proc=" << myid << "\n";
-                printf(oss.str().c_str());
-
-                TEST::check_buffer(My_NumGrid_In,
-                                   input_buffer.data(),
-                                   ifft_input_buffer_ref.data(), myid );
-            }
-            MPI_Barrier(MPI_COMM_WORLD);
-        }
+        fft_mngr.transpose_output_to_input(output_buffer, input_buffer);
 
         //--- perform Inverse FFT
-        fft_mngr.fft_c2c_3d_backward(input_buffer, output_buffer);
+        fft_mngr.fft_c2c_backward(input_buffer, output_buffer);
 
         //--- collect result
-        for(i=0;i<N1;i++){
-            for(j=0;j<N2;j++){
-                for(k=0;k<N3;k++){
-                    IFFT_Output[i][j][k].r = 0.0;
-                    IFFT_Output[i][j][k].i = 0.0;
-                }
-            }
-        }
-        fft_mngr.allgather_3d_array( &(IFFT_Output[0][0][0]) , output_buffer);
+        fft_mngr.allgather_array( &(IFFT_Output[0][0][0]) , output_buffer);
 
         //--- normalize Inverse FFT result
         const double N_inv = 1.0/static_cast<double>(N1*N2*N3);
@@ -491,13 +525,12 @@ int main(int argc, char* argv[])
         MPI_Barrier(MPI_COMM_WORLD);
         if(myid == 0){
             std::ostringstream oss;
-            oss << "\n";
-            oss_green(oss, " -- check inverse FFT result");
+            oss_green(oss, "   Manager<>::transpose_output_to_input() & Manager<>::fft_c2c_backward()");
             oss << " at proc=" << myid << "\n";
             printf(oss.str().c_str());
 
-            TEST::check_3d_array(N1, N2, N3,
-                                 &(IFFT_Output[0][0][0]), &(Input[0][0][0]) );
+            test_result += TEST::check_3d_array(N1, N2, N3,
+                                                &(IFFT_Output[0][0][0]), &(Input[0][0][0]) );
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
@@ -515,6 +548,7 @@ int main(int argc, char* argv[])
             printf("\n");
         }
         for(int i_proc=0; i_proc<numprocs; ++i_proc){
+            MPI_Barrier(MPI_COMM_WORLD);
             if(i_proc == myid){
                 std::ostringstream oss;
                 oss_green(oss, " -- check index for input buffer");
@@ -522,34 +556,34 @@ int main(int argc, char* argv[])
                 printf(oss.str().c_str());
 
                 std::vector<OpenFFT::dcomplex> buf, buf_ref;
-                fft_mngr.copy_3d_array_into_input_buffer( &(Input[0][0][0]), buf_ref);
+                fft_mngr.copy_array_into_input_buffer( &(Input[0][0][0]), buf_ref);
 
-                print_green("    Manager<>::gen_3d_input_index_sequence()\n");
-                fft_mngr.gen_3d_input_index_sequence(index_seq);
+                print_green("    Manager<>::gen_input_index_sequence()\n");
+                fft_mngr.gen_input_index_sequence(index_seq);
                 buf.clear();
                 for(const auto& index : index_seq){
                     buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ] );
                 }
-                TEST::check_buffer(My_NumGrid_In,
-                                   buf.data(),
-                                   buf_ref.data(), myid );
+                test_result += TEST::check_buffer(My_NumGrid_In,
+                                                  buf.data(),
+                                                  buf_ref.data(), myid );
 
                 for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
                     const int n_grid_in = fft_mngr.get_n_grid_in(tgt_proc);
                     buf_ref.resize( n_grid_in );
-                    fft_mngr.apply_3d_array_with_input_buffer( &(Input[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
+                    fft_mngr.apply_array_with_input_buffer( &(Input[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
 
-                    print_green("    Manager<>::gen_3d_input_index_sequence( tgt_proc )");
+                    print_green("    Manager<>::gen_input_index_sequence( tgt_proc )");
                     printf(", tgt_proc=%d\n", tgt_proc);
 
-                    fft_mngr.gen_3d_input_index_sequence(index_seq, tgt_proc);
+                    fft_mngr.gen_input_index_sequence(index_seq, tgt_proc);
                     buf.clear();
                     for(const auto& index : index_seq){
                         buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ] );
                     }
-                    TEST::check_buffer(n_grid_in,
-                                       buf.data(),
-                                       buf_ref.data(), myid );
+                    test_result += TEST::check_buffer(n_grid_in,
+                                                      buf.data(),
+                                                      buf_ref.data(), myid );
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
@@ -558,6 +592,7 @@ int main(int argc, char* argv[])
         MPI_Barrier(MPI_COMM_WORLD);
         if(myid == 0) printf("\n");
         for(int i_proc=0; i_proc<numprocs; ++i_proc){
+            MPI_Barrier(MPI_COMM_WORLD);
             if(i_proc == myid){
                 std::ostringstream oss;
                 oss_green(oss, " -- check for output buffer");
@@ -566,35 +601,35 @@ int main(int argc, char* argv[])
 
                 std::vector<OpenFFT::dcomplex> buf, buf_ref;
                 buf_ref.resize( fft_mngr.get_n_grid_out() );
-                fft_mngr.apply_3d_array_with_output_buffer( &(Output[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{} );
+                fft_mngr.apply_array_with_output_buffer( &(Output[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{} );
 
-                print_green("    Manager<>::gen_3d_output_index_sequence()\n");
+                print_green("    Manager<>::gen_output_index_sequence()\n");
 
-                fft_mngr.gen_3d_output_index_sequence(index_seq);
+                fft_mngr.gen_output_index_sequence(index_seq);
                 buf.clear();
                 for(const auto& index : index_seq){
                     buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
                 }
-                TEST::check_buffer(My_NumGrid_Out,
-                                   buf.data(),
-                                   buf_ref.data(), myid );
+                test_result += TEST::check_buffer(My_NumGrid_Out,
+                                                  buf.data(),
+                                                  buf_ref.data(), myid );
 
                 for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
                     const int n_grid_out = fft_mngr.get_n_grid_out(tgt_proc);
                     buf_ref.resize( n_grid_out );
-                    fft_mngr.apply_3d_array_with_output_buffer( &(Output[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
+                    fft_mngr.apply_array_with_output_buffer( &(Output[0][0][0]), buf_ref, OpenFFT::CopyIntoBuffer{}, tgt_proc);
 
-                    print_green("    Manager<>::gen_3d_output_index_sequence( tgt_proc )");
+                    print_green("    Manager<>::gen_output_index_sequence( tgt_proc )");
                     printf(", tgt_proc=%d\n", tgt_proc);
 
-                    fft_mngr.gen_3d_output_index_sequence(index_seq, tgt_proc);
+                    fft_mngr.gen_output_index_sequence(index_seq, tgt_proc);
                     buf.clear();
                     for(const auto& index : index_seq){
                         buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
                     }
-                    TEST::check_buffer(n_grid_out,
-                                       buf.data(),
-                                       buf_ref.data(), myid );
+                    test_result += TEST::check_buffer(n_grid_out,
+                                                      buf.data(),
+                                                      buf_ref.data(), myid );
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
@@ -604,6 +639,10 @@ int main(int argc, char* argv[])
     /* Finalize OpenFFT */
     fft_mngr.finalize();
 
+    //--- report test result
+    const int final_state = TEST::report(test_result);
+
     MPI_Finalize();
 
+    return final_state;
 }

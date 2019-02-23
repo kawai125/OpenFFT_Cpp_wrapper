@@ -76,7 +76,7 @@ namespace OpenFFT {
                         iy<0 || this->ny<=iy ||
                         ix<0 || this->nx<=ix   ){
                         std::ostringstream oss;
-                        oss << "internal error: invalid index for 3D-array." << "\n"
+                        oss << "internal error: invalid index for 4D-array." << "\n"
                             << "   (iw, iz, iy, ix) = ("
                             << iw << ", " << iz << ", " << iy << ", " << ix << ")" << "\n"
                             << "    must be in range: (0, 0, 0, 0) to ("
@@ -138,6 +138,30 @@ namespace OpenFFT {
             }
         };
 
+
+        template <class Tdata>
+        class CommImpl{
+            private:
+                static std::vector<std::vector<Tdata>> mpi_send_buf;
+                static std::vector<std::vector<Tdata>> mpi_recv_buf;
+
+            public:
+                void init(const int n_proc){
+                    mpi_send_buf.resize(n_proc);
+                    mpi_recv_buf.resize(n_proc);
+                }
+
+                void gather_impl();
+                void allgather_impl();
+                void transpose_input_to_output_impl();
+                void transpose_output_to_input_impl();
+        };
+        template <class Tdata>
+        std::vector<std::vector<Tdata>> CommImpl<Tdata>::mpi_send_buf;
+        template <class Tdata>
+        std::vector<std::vector<Tdata>> CommImpl<Tdata>::mpi_recv_buf;
+
+
         /*
         *  @brief global manager for OpenFFT functions
         */
@@ -153,8 +177,9 @@ namespace OpenFFT {
 
         private:
             bool plan_flag               = false;
-            bool out_in_convert_flag     = false;
-            bool out_in_convert_mpi_flag = false;
+            bool convert_flag            = false;
+            bool convert_out_in_mpi_flag = false;
+            bool convert_in_out_mpi_flag = false;
 
             FFT_GridType grid_type = FFT_GridType::none;
             int          n_x, n_y, n_z, n_w;
@@ -165,21 +190,18 @@ namespace OpenFFT {
             IndexList my_index_in , my_index_out;
 
             //--- input & output buffer convert matrix
-            std::vector<int>                    n_grid_in_list;
-            std::vector<int>                    n_grid_out_list;
-            std::vector<IndexList>              index_in_list;
-            std::vector<IndexList>              index_out_list;
+            std::vector<int>       n_grid_in_list;
+            std::vector<int>       n_grid_out_list;
+            std::vector<IndexList> index_in_list;
+            std::vector<IndexList> index_out_list;
 
-            struct IndexMark{
-                int i_proc, index;
-            };
-            std::vector<IndexMark>              index_array;
-            std::vector<IndexMark>              out_in_convert_matrix;
-
-            std::vector<std::vector<int>>       mpi_send_index;
-            std::vector<std::vector<int>>       mpi_recv_index;
             std::vector<std::vector<complex_t>> mpi_send_buf;
             std::vector<std::vector<complex_t>> mpi_recv_buf;
+
+            std::vector<std::vector<int>> convert_out_in_send_index;
+            std::vector<std::vector<int>> convert_out_in_recv_index;
+            std::vector<std::vector<int>> convert_in_out_send_index;
+            std::vector<std::vector<int>> convert_in_out_recv_index;
 
         public:
             GlobalManager() = default;
@@ -239,7 +261,8 @@ namespace OpenFFT {
                 this->n_z = n_z;
                 this->n_w = 0;
 
-                this->_prepare_3d_out_in_convert(false);  // enable gather and convert function
+                this->_collect_buffer_info(); // enable gather function
+                this->_prepare_convert<3>();  // enable convert function
                 this->plan_flag = true;
             }
             void init_c2c_4d(const int n_w, const int n_z, const int n_y, const int n_x,
@@ -262,21 +285,20 @@ namespace OpenFFT {
                 this->n_w = n_w;
 
                 this->_collect_buffer_info();  // enable gather function
+                this->_prepare_convert<4>();   // enable convert function
                 this->plan_flag = true;
             }
             void finalize(){
                 if( this->plan_flag ){
                     openfft_finalize();
                     this->plan_flag               = false;
-                    this->out_in_convert_flag     = false;
-                    this->out_in_convert_mpi_flag = false;
+                    this->convert_flag            = false;
+                    this->convert_out_in_mpi_flag = false;
+                    this->convert_in_out_mpi_flag = false;
                     this->grid_type               = FFT_GridType::none;
 
                     return;
                 }
-                #ifndef NDEBUG
-                    throw std::logic_error("'finalize()' was called at twice.");
-                #endif
             }
 
             //----------------------------------------------------------------------
@@ -333,189 +355,206 @@ namespace OpenFFT {
                 return t;
             }
 
+            FFT_GridType get_grid_type() const {
+                return this->grid_type;
+            }
+
+            void get_grid_size(int &nz, int &ny, int &nx) const {
+                this->_check_3d_only();
+                nz = this->n_z;
+                ny = this->n_y;
+                nx = this->n_x;
+
+            }
+            void get_grid_size(int &nw, int &nz, int &ny, int &nx) const {
+                this->_check_grid_type(FFT_GridType::c2c_4D);
+                nw = this->n_w;
+                nz = this->n_z;
+                ny = this->n_y;
+                nx = this->n_x;
+            }
+
             //----------------------------------------------------------------------
             //    FFT & IFFT wrapper
             //----------------------------------------------------------------------
-            void fft_r2c_3d_forward(float_t   *input,
-                                    complex_t *output){
+            void fft_r2c_forward(float_t   *input,
+                                 complex_t *output){
                 this->_check_grid_type(FFT_GridType::r2c_3D);
                 openfft_exec_r2c_3d(input, output);
             }
 
-            void fft_c2c_3d_forward(complex_t *input,
-                                    complex_t *output){
-                this->_check_grid_type(FFT_GridType::c2c_3D);
-                openfft_exec_c2c_3d(input, output);
+            void fft_c2c_forward(complex_t *input,
+                                 complex_t *output){
+                switch(this->grid_type){
+                    case FFT_GridType::c2c_3D:
+                        openfft_exec_c2c_3d(input, output);
+                    break;
+
+                    case FFT_GridType::c2c_4D:
+                        openfft_exec_c2c_4d(input, output);
+                    break;
+
+                    case FFT_GridType::none:
+                        throw std::logic_error("OpenFFT: manager is not initialized.");
+                    break;
+
+                    default:
+                        throw std::logic_error("OpenFFT: invalid grid type.");
+                }
             }
-            void fft_c2c_3d_backward(complex_t *input,
-                                     complex_t *output){
-                 this->_check_grid_type(FFT_GridType::c2c_3D);
+            void fft_c2c_backward(complex_t *input,
+                                  complex_t *output){
+
+                switch(this->grid_type){
+                    case FFT_GridType::c2c_3D:
+                    case FFT_GridType::c2c_4D:
+                    //--- check passed
+                    break;
+
+                    case FFT_GridType::r2c_3D:
+                        throw std::logic_error("cannot call fft_c2c_backword() for r2c_3D.");
+                    break;
+
+                    case FFT_GridType::none:
+                        throw std::logic_error("OpenFFT: manager is not initialized.");
+                    break;
+
+                    default:
+                        throw std::logic_error("OpenFFT: invalid grid type.");
+
+                }
 
                 //--- get complex conjugate
                 for(int i=0; i<this->my_n_grid_in; ++i){
                     input[i].i = - input[i].i;
                 }
 
-                //--- performe forword FFT
-                openfft_exec_c2c_3d(input, output);
+                //--- performe backword FFT
+                switch(this->grid_type){
+                    case FFT_GridType::c2c_3D:
+                        openfft_exec_c2c_3d(input, output);
+                    break;
+
+                    case FFT_GridType::c2c_4D:
+                        openfft_exec_c2c_4d(input, output);
+                    break;
+
+                    default:
+                        throw std::logic_error("OpenFFT: undefined grid type.");
+                }
 
                 //--- get complex conjugate
                 //       note: FFT_BACKWARD transforme of FFTW3, it not devide by (NZ * Ny * Zx).
                 //             this implementation take compatibility with FFTW3.
                 for(int i=0; i<this->my_n_grid_out; ++i){
-                    output[i].r =   output[i].r;
                     output[i].i = - output[i].i;
                 }
             }
-            void fft_c2c_4d_forward(complex_t *input,
-                                    complex_t *output){
-                this->_check_grid_type(FFT_GridType::c2c_4D);
-                openfft_exec_c2c_4d(input, output);
-            }
-            /*   under developping
-            void fft_c2c_4d_backward(complex_t *input,
-                                     complex_t *output){
-                 this->_check_grid_type(FFT_GridType::c2c_4D);
-
-                //--- get complex conjugate
-                for(int i=0; i<this->my_n_grid_in; ++i){
-                    input[i].i = - input[i].i;
-                }
-
-                //--- performe forword FFT
-                openfft_exec_c2c_4d(input, output);
-
-                //--- get complex conjugate
-                //       note: FFT_BACKWARD transforme of FFTW3, it not devide by (NZ * Ny * Zx).
-                //             this implementation take compatibility with FFTW3.
-                for(int i=0; i<this->my_n_grid_out; ++i){
-                    output[i].r =   output[i].r * N_inv;
-                    output[i].i = - output[i].i * N_inv;
-                }
-            }
-            */
 
             //----------------------------------------------------------------------
             //    input buffer manipulator
             //----------------------------------------------------------------------
-            template <class T_3d ,
+            template <class T_arr,
                       class T_buf,
                       class ApplyFunc >
-            ApplyFunc apply_3d_array_with_input_buffer(T_3d      *array_3d,
-                                                       T_buf     *buffer,
-                                                       ApplyFunc  func     ) const {
-                return this->_apply_3d_array_with_input_buffer_impl(array_3d, buffer,
-                                                                    this->get_n_grid_in(),
-                                                                    this->get_index_in(),
-                                                                    Apply3DInterface<T_3d, T_buf, ApplyFunc>{},
-                                                                    func );
+            ApplyFunc apply_array_with_input_buffer(T_arr     *array,
+                                                    T_buf     *buffer,
+                                                    ApplyFunc  func   ) const {
+                const int my_rank = _mpi::get_rank();
+                return this->apply_array_with_input_buffer(array, buffer, func, my_rank);
             }
-            template <class T_3d ,
+            template <class T_arr,
                       class T_buf,
                       class ApplyFunc >
-            ApplyFunc apply_3d_array_with_input_buffer(      T_3d      *array_3d,
-                                                             T_buf     *buffer,
-                                                             ApplyFunc  func,
-                                                       const int        i_proc   ) const {
-                return this->_apply_3d_array_with_input_buffer_impl(array_3d, buffer,
-                                                                    this->get_n_grid_in(i_proc),
-                                                                    this->get_index_in( i_proc),
-                                                                    Apply3DInterface<T_3d, T_buf, ApplyFunc>{},
-                                                                    func );
-            }
-            template <class T_4d ,
-                      class T_buf,
-                      class ApplyFunc >
-            ApplyFunc apply_4d_array_with_input_buffer(T_4d      *array_4d,
-                                                       T_buf     *buffer,
-                                                       ApplyFunc  func     ) const {
-                return this->_apply_4d_array_with_input_buffer_impl(array_4d, buffer,
-                                                                    this->get_n_grid_in(),
-                                                                    this->get_index_in(),
-                                                                    Apply4DInterface<T_4d, T_buf, ApplyFunc>{},
-                                                                    func );
-            }
-            template <class T_4d ,
-                      class T_buf,
-                      class ApplyFunc >
-            ApplyFunc apply_4d_array_with_input_buffer(      T_4d      *array_4d,
-                                                             T_buf     *buffer,
-                                                             ApplyFunc  func,
-                                                       const int        i_proc   ) const {
-                return this->_apply_4d_array_with_input_buffer_impl(array_4d, buffer,
-                                                                    this->get_n_grid_in(i_proc),
-                                                                    this->get_index_in( i_proc),
-                                                                    Apply4DInterface<T_4d, T_buf, ApplyFunc>{},
-                                                                    func );
+            ApplyFunc apply_array_with_input_buffer(      T_arr     *array,
+                                                          T_buf     *buffer,
+                                                          ApplyFunc  func,
+                                                    const int        i_proc   ) const {
+
+                switch(this->grid_type){
+                    case FFT_GridType::r2c_3D:
+                    case FFT_GridType::c2c_3D:
+                        return this->_apply_3d_array_with_input_buffer_impl(array, buffer,
+                                                                            this->get_n_grid_in(i_proc),
+                                                                            this->get_index_in( i_proc),
+                                                                            Apply3DInterface<T_arr, T_buf, ApplyFunc>{},
+                                                                            func );
+                    break;
+
+                    case FFT_GridType::c2c_4D:
+                        return this->_apply_4d_array_with_input_buffer_impl(array, buffer,
+                                                                            this->get_n_grid_in(i_proc),
+                                                                            this->get_index_in( i_proc),
+                                                                            Apply4DInterface<T_arr, T_buf, ApplyFunc>{},
+                                                                            func );
+                    break;
+
+                    case FFT_GridType::none:
+                        throw std::logic_error("manager is not initialized.");
+                    break;
+
+                    default:
+                        throw std::logic_error("invalid grid type.");
+                }
             }
 
             //----------------------------------------------------------------------
             //    output buffer manipulator
             //----------------------------------------------------------------------
-            template <class T_3d ,
+            template <class T_arr,
                       class T_buf,
                       class ApplyFunc >
-            ApplyFunc apply_3d_array_with_output_buffer(T_3d      *array_3d,
-                                                        T_buf     *buffer,
-                                                        ApplyFunc  func     ) const {
-                return this->_apply_3d_array_with_output_buffer_impl(array_3d, buffer,
-                                                                     this->get_n_grid_out(),
-                                                                     this->get_index_out(),
-                                                                     Apply3DInterface<T_3d, T_buf, ApplyFunc>{},
-                                                                     func );
+            ApplyFunc apply_array_with_output_buffer(      T_arr     *array,
+                                                           T_buf     *buffer,
+                                                           ApplyFunc  func   ) const {
+                const int my_rank = _mpi::get_rank();
+                return this->apply_array_with_output_buffer(array, buffer, func, my_rank);
             }
-            template <class T_3d ,
+            template <class T_arr,
                       class T_buf,
                       class ApplyFunc >
-            ApplyFunc apply_3d_array_with_output_buffer(      T_3d      *array_3d,
-                                                              T_buf     *buffer,
-                                                              ApplyFunc  func,
-                                                        const int        i_proc   ) const {
-                return this->_apply_3d_array_with_output_buffer_impl(array_3d, buffer,
-                                                                     this->get_n_grid_out(i_proc),
-                                                                     this->get_index_out( i_proc),
-                                                                     Apply3DInterface<T_3d, T_buf, ApplyFunc>{},
-                                                                     func );
-            }
-            template <class T_4d ,
-                      class T_buf,
-                      class ApplyFunc >
-            ApplyFunc apply_4d_array_with_output_buffer(T_4d      *array_4d,
-                                                        T_buf     *buffer,
-                                                        ApplyFunc  func     ) const {
-                return this->_apply_4d_array_with_output_buffer_impl(array_4d, buffer,
-                                                                     this->get_n_grid_out(),
-                                                                     this->get_index_out(),
-                                                                     Apply4DInterface<T_4d, T_buf, ApplyFunc>{},
-                                                                     func );
-            }
-            template <class T_4d ,
-                      class T_buf,
-                      class ApplyFunc >
-            ApplyFunc apply_4d_array_with_output_buffer(      T_4d      *array_4d,
-                                                              T_buf     *buffer,
-                                                              ApplyFunc  func,
-                                                        const int        i_proc   ) const {
-                return this->_apply_4d_array_with_output_buffer_impl(array_4d, buffer,
-                                                                     this->get_n_grid_out(i_proc),
-                                                                     this->get_index_out( i_proc),
-                                                                     Apply4DInterface<T_4d, T_buf, ApplyFunc>{},
-                                                                     func );
+            ApplyFunc apply_array_with_output_buffer(      T_arr     *array,
+                                                           T_buf     *buffer,
+                                                           ApplyFunc  func,
+                                                     const int        i_proc   ) const {
+
+                switch(this->grid_type){
+                    case FFT_GridType::r2c_3D:
+                    case FFT_GridType::c2c_3D:
+                        return this->_apply_3d_array_with_output_buffer_impl(array, buffer,
+                                                                             this->get_n_grid_out(i_proc),
+                                                                             this->get_index_out( i_proc),
+                                                                             Apply3DInterface<T_arr, T_buf, ApplyFunc>{},
+                                                                             func );
+                    break;
+
+                    case FFT_GridType::c2c_4D:
+                        return this->_apply_4d_array_with_output_buffer_impl(array, buffer,
+                                                                             this->get_n_grid_out(i_proc),
+                                                                             this->get_index_out( i_proc),
+                                                                             Apply4DInterface<T_arr, T_buf, ApplyFunc>{},
+                                                                             func );
+                    break;
+
+                    case FFT_GridType::none:
+                        throw std::logic_error("manager is not initialized.");
+                    break;
+
+                    default:
+                        throw std::logic_error("invalid grid type.");
+                }
             }
 
             //----------------------------------------------------------------------
             //    index sequence generator
             //----------------------------------------------------------------------
-            void gen_3d_input_index_sequence(std::array<int,3> *index_seq) const {
-                const auto* dummy_ptr = index_seq;
-                this->_apply_3d_array_with_input_buffer_impl(index_seq, dummy_ptr,
-                                                             this->get_n_grid_in(),
-                                                             this->get_index_in(),
-                                                             GetIndex3DInterface{},
-                                                             DoNothing{} );
+            //--- for 3D array
+            void gen_input_index_sequence(std::array<int,3> *index_seq) const {
+                const int my_rank = _mpi::get_rank();
+                this->gen_input_index_sequence(index_seq, my_rank);
             }
-            void gen_3d_input_index_sequence(      std::array<int,3> *index_seq,
-                                             const int                i_proc    ) const {
+            void gen_input_index_sequence(      std::array<int,3> *index_seq,
+                                          const int                i_proc    ) const {
                 const auto* dummy_ptr = index_seq;
                 this->_apply_3d_array_with_input_buffer_impl(index_seq, dummy_ptr,
                                                              this->get_n_grid_in(i_proc),
@@ -523,16 +562,12 @@ namespace OpenFFT {
                                                              GetIndex3DInterface{},
                                                              DoNothing{} );
             }
-            void gen_3d_output_index_sequence(std::array<int,3> *index_seq) const {
-                const auto* dummy_ptr = index_seq;
-                this->_apply_3d_array_with_output_buffer_impl(index_seq, dummy_ptr,
-                                                              this->get_n_grid_out(),
-                                                              this->get_index_out(),
-                                                              GetIndex3DInterface{},
-                                                              DoNothing{} );
+            void gen_output_index_sequence(std::array<int,3> *index_seq) const {
+                const int my_rank = _mpi::get_rank();
+                this->gen_output_index_sequence(index_seq, my_rank);
             }
-            void gen_3d_output_index_sequence(      std::array<int,3> *index_seq,
-                                              const int                i_proc    ) const {
+            void gen_output_index_sequence(      std::array<int,3> *index_seq,
+                                           const int                i_proc    ) const {
                 const auto* dummy_ptr = index_seq;
                 this->_apply_3d_array_with_output_buffer_impl(index_seq, dummy_ptr,
                                                               this->get_n_grid_out(i_proc),
@@ -541,16 +576,13 @@ namespace OpenFFT {
                                                               DoNothing{} );
             }
 
-            void gen_4d_input_index_sequence(std::array<int,4> *index_seq) const {
-                const auto* dummy_ptr = index_seq;
-                this->_apply_4d_array_with_input_buffer_impl(index_seq, dummy_ptr,
-                                                             this->get_n_grid_in(),
-                                                             this->get_index_in(),
-                                                             GetIndex4DInterface{},
-                                                             DoNothing{} );
+            //--- for 4D array
+            void gen_input_index_sequence(std::array<int,4> *index_seq) const {
+                const int my_rank = _mpi::get_rank();
+                this->gen_input_index_sequence(index_seq, my_rank);
             }
-            void gen_4d_input_index_sequence(      std::array<int,4> *index_seq,
-                                             const int                i_proc    ) const {
+            void gen_input_index_sequence(      std::array<int,4> *index_seq,
+                                          const int                i_proc    ) const {
                 const auto* dummy_ptr = index_seq;
                 this->_apply_4d_array_with_input_buffer_impl(index_seq, dummy_ptr,
                                                              this->get_n_grid_in(i_proc),
@@ -558,16 +590,12 @@ namespace OpenFFT {
                                                              GetIndex4DInterface{},
                                                              DoNothing{} );
             }
-            void gen_4d_output_index_sequence(std::array<int,4> *index_seq) const {
-                const auto* dummy_ptr = index_seq;
-                this->_apply_4d_array_with_output_buffer_impl(index_seq, dummy_ptr,
-                                                              this->get_n_grid_out(),
-                                                              this->get_index_out(),
-                                                              GetIndex4DInterface{},
-                                                              DoNothing{} );
+            void gen_output_index_sequence(std::array<int,4> *index_seq) const {
+                const int my_rank = _mpi::get_rank();
+                this->gen_output_index_sequence(index_seq, my_rank);
             }
-            void gen_4d_output_index_sequence(      std::array<int,4> *index_seq,
-                                              const int                i_proc    ) const {
+            void gen_output_index_sequence(      std::array<int,4> *index_seq,
+                                           const int                i_proc    ) const {
                 const auto* dummy_ptr = index_seq;
                 this->_apply_4d_array_with_output_buffer_impl(index_seq, dummy_ptr,
                                                               this->get_n_grid_out(i_proc),
@@ -577,32 +605,30 @@ namespace OpenFFT {
             }
 
             //----------------------------------------------------------------------
-            //    output_buffer to input_buffer converter
+            //    transposer between output_buffer and input_buffer
             //----------------------------------------------------------------------
-            void convert_output_to_input(      complex_t *input_buf,
-                                         const complex_t *output_buf){
+            void transpose_input_to_output(const complex_t *input_buf,
+                                                 complex_t *output_buf){
 
-                if( this->grid_type != FFT_GridType::c2c_3D ){
-                    throw std::logic_error("convert function is implemented for c2c_3D only.");
+                this->_check_c2c_only();
+
+                if( ! this->convert_flag ){
+                    throw std::logic_error("transpose_input_to_output() function is not prepared.");
                 }
 
-                if( ! this->out_in_convert_flag ){
-                    throw std::logic_error("convert_output_to_input() function is not prepared.");
-                }
-
-                if(this->out_in_convert_mpi_flag){
+                if(this->convert_in_out_mpi_flag){
                     //--- convert with MPI Alltoall
                     const int n_proc = _mpi::get_n_proc();
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
                         auto&       send_buf   = this->mpi_send_buf[i_proc];
-                        const auto& send_index = this->mpi_send_index[i_proc];
+                        const auto& send_index = this->convert_in_out_send_index[i_proc];
 
                         send_buf.clear();
 
                         for(size_t ii=0; ii<send_index.size(); ++ii){
                             const int jj = send_index[ii];
-                            send_buf.push_back( output_buf[jj] );
+                            send_buf.emplace_back( input_buf[jj] );
                         }
                     }
 
@@ -610,7 +636,81 @@ namespace OpenFFT {
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
                         const auto& recv_buf   = this->mpi_recv_buf[i_proc];
-                        const auto& recv_index = this->mpi_recv_index[i_proc];
+                        const auto& recv_index = this->convert_in_out_recv_index[i_proc];
+
+                        for(size_t ii=0; ii<recv_index.size(); ++ii){
+                            const int jj   = recv_index[ii];
+                            output_buf[jj] = recv_buf[ii];
+                        }
+                    }
+                } else {
+                    //--- convert in local
+                    const int my_rank = _mpi::get_rank();
+                    auto& send_buf = this->mpi_send_buf[my_rank];
+                    send_buf.clear();
+
+                    const auto& send_index = this->convert_in_out_send_index[my_rank];
+
+                    for(size_t ii=0; ii<send_index.size(); ++ii){
+                        const int index = send_index[ii];
+                        send_buf.emplace_back( input_buf[index] );
+                    }
+
+                    if( send_buf.size() != static_cast<size_t>(this->my_n_grid_out) ){
+                        std::ostringstream oss;
+                        oss << "internal error: length of 'send_buf' and 'my_n_grid_out' is not match.\n"
+                            << "   send_buf.size() = " << send_buf.size()
+                            << ", must be = " << this->get_n_grid_out() << " (= n_grid_out).\n";
+                        throw std::logic_error(oss.str());
+                    }
+
+                    const auto& recv_index = this->convert_in_out_recv_index[my_rank];
+
+                    if( send_index.size() != recv_index.size() ){
+                        std::ostringstream oss;
+                        oss << "internal error: length of 'send_index' and 'recv_index' is not match.\n"
+                            << "   send_index.size() = " << send_index.size() << "\n"
+                            << "   recv_index.size() = " << recv_index.size() << "\n";
+                        throw std::logic_error(oss.str());
+                    }
+
+                    for(size_t ii=0; ii<recv_index.size(); ++ii){
+                        const int index   = recv_index[ii];
+                        output_buf[index] = send_buf[ii];
+                    }
+                }
+            }
+
+            void transpose_output_to_input(const complex_t *output_buf,
+                                                 complex_t *input_buf ){
+
+                this->_check_c2c_only();
+
+                if( ! this->convert_flag ){
+                    throw std::logic_error("transpose_output_to_input() function is not prepared.");
+                }
+
+                if(this->convert_out_in_mpi_flag){
+                    //--- convert with MPI Alltoall
+                    const int n_proc = _mpi::get_n_proc();
+
+                    for(int i_proc=0; i_proc<n_proc; ++i_proc){
+                        auto&       send_buf   = this->mpi_send_buf[i_proc];
+                        const auto& send_index = this->convert_out_in_send_index[i_proc];
+
+                        send_buf.clear();
+
+                        for(size_t ii=0; ii<send_index.size(); ++ii){
+                            const int jj = send_index[ii];
+                            send_buf.emplace_back( output_buf[jj] );
+                        }
+                    }
+
+                    _mpi::alltoall(this->mpi_send_buf, this->mpi_recv_buf);
+
+                    for(int i_proc=0; i_proc<n_proc; ++i_proc){
+                        const auto& recv_buf   = this->mpi_recv_buf[i_proc];
+                        const auto& recv_index = this->convert_out_in_recv_index[i_proc];
 
                         for(size_t ii=0; ii<recv_index.size(); ++ii){
                             const int jj  = recv_index[ii];
@@ -623,17 +723,30 @@ namespace OpenFFT {
                     auto& send_buf = this->mpi_send_buf[my_rank];
                     send_buf.clear();
 
-                    const auto& send_index = this->mpi_send_index[my_rank];
+                    const auto& send_index = this->convert_out_in_send_index[my_rank];
+
                     for(size_t ii=0; ii<send_index.size(); ++ii){
                         const int index = send_index[ii];
-                        send_buf.push_back( output_buf[index] );
+                        send_buf.emplace_back( output_buf[index] );
                     }
 
-                    assert( send_buf.size() == static_cast<size_t>(this->my_n_grid_in) );
+                    if( send_buf.size() != static_cast<size_t>(this->my_n_grid_in) ){
+                        std::ostringstream oss;
+                        oss << "internal error: length of 'send_buf' and 'my_n_grid_in' is not match.\n"
+                            << "   send_buf.size() = " << send_buf.size()
+                            << ", must be = " << this->get_n_grid_in() << " (= n_grid_in).\n";
+                        throw std::logic_error(oss.str());
+                    }
 
-                    const auto& recv_index = this->mpi_recv_index[my_rank];
+                    const auto& recv_index = this->convert_out_in_recv_index[my_rank];
 
-                    assert( send_index.size() == recv_index.size() );
+                    if( send_index.size() != recv_index.size() ){
+                        std::ostringstream oss;
+                        oss << "internal error: length of 'send_index' and 'recv_index' is not match.\n"
+                            << "   send_index.size() = " << send_index.size() << "\n"
+                            << "   recv_index.size() = " << recv_index.size() << "\n";
+                        throw std::logic_error(oss.str());
+                    }
 
                     for(size_t ii=0; ii<recv_index.size(); ++ii){
                         const int index = recv_index[ii];
@@ -645,9 +758,9 @@ namespace OpenFFT {
             //----------------------------------------------------------------------
             //    gather inferface for global 3D/4D-array from output_buffer
             //----------------------------------------------------------------------
-            void gather_3d_array(      complex_t *array_3d,
-                                 const complex_t *output_buf,
-                                 const int        tgt_proc   ){
+            void gather_array(      complex_t *array,
+                              const complex_t *output_buf,
+                              const int        tgt_proc   ){
 
                 //--- make send buffer
                 const int n_proc  = _mpi::get_n_proc();
@@ -664,22 +777,14 @@ namespace OpenFFT {
 
                 if(my_rank != tgt_proc) return;
 
-                //--- build array_3d
+                //--- build array
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    const int   n_grid_out = this->get_n_grid_out(i_proc);
-                    const auto  index_out  = this->get_index_out( i_proc);
-                    const auto& recv_buf   = this->mpi_recv_buf[i_proc];
-
-                    this->_apply_3d_array_with_output_buffer_impl(array_3d,
-                                                                  recv_buf.data(),
-                                                                  n_grid_out,
-                                                                  index_out,
-                                                                  Apply3DInterface<complex_t, const complex_t, CopyFromBuffer>{},
-                                                                  CopyFromBuffer{} );
+                    const auto& recv_buf = this->mpi_recv_buf[i_proc];
+                    this->apply_array_with_output_buffer(array, recv_buf.data(), CopyFromBuffer{}, i_proc);
                 }
             }
-            void allgather_3d_array(      complex_t *array_3d,
-                                    const complex_t *output_buf){
+            void allgather_array(      complex_t *array,
+                                 const complex_t *output_buf){
 
                 //--- make send buffer
                 const int n_proc  = _mpi::get_n_proc();
@@ -694,115 +799,11 @@ namespace OpenFFT {
                 //--- collect output buffers
                 _mpi::allgather(send_buf, this->mpi_recv_buf);
 
-                //--- build array_3d
+                //--- build array
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    const int   n_grid_out = this->get_n_grid_out(i_proc);
-                    const auto  index_out  = this->get_index_out( i_proc);
-                    const auto& recv_buf   = this->mpi_recv_buf[i_proc];
-
-                    this->_apply_3d_array_with_output_buffer_impl(array_3d,
-                                                                  recv_buf.data(),
-                                                                  n_grid_out,
-                                                                  index_out,
-                                                                  Apply3DInterface<complex_t, const complex_t, CopyFromBuffer>{},
-                                                                  CopyFromBuffer{} );
+                    const auto& recv_buf = this->mpi_recv_buf[i_proc];
+                    this->apply_array_with_output_buffer(array, recv_buf.data(), CopyFromBuffer{}, i_proc);
                 }
-            }
-            void gather_4d_array(      complex_t *array_4d,
-                                 const complex_t *output_buf,
-                                 const int        tgt_proc   ){
-
-                //--- make send buffer
-                const int n_proc  = _mpi::get_n_proc();
-                const int my_rank = _mpi::get_rank();
-
-                auto& send_buf = this->mpi_send_buf[tgt_proc];
-                send_buf.resize(this->my_n_grid_out);
-                for(int ii=0; ii<this->my_n_grid_out; ++ii){
-                    send_buf[ii] = output_buf[ii];
-                }
-
-                //--- collect output buffers
-                _mpi::gather(send_buf, this->mpi_recv_buf, tgt_proc);
-
-                if(my_rank != tgt_proc) return;
-
-                //--- build array_4d
-                for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    const auto& recv_buf   = this->mpi_recv_buf.at(i_proc);
-
-                    this->apply_4d_array_with_output_buffer(array_4d,
-                                                            recv_buf.data(),
-                                                            CopyFromBuffer{},
-                                                            i_proc );
-                }
-            }
-            void allgather_4d_array(      complex_t *array_4d,
-                                    const complex_t *output_buf){
-
-                //--- make send buffer
-                const int n_proc  = _mpi::get_n_proc();
-                const int my_rank = _mpi::get_rank();
-
-                auto& send_buf = this->mpi_send_buf[my_rank];
-                send_buf.resize(this->my_n_grid_out);
-                for(int ii=0; ii<this->my_n_grid_out; ++ii){
-                    send_buf[ii] = output_buf[ii];
-                }
-
-                //--- collect output buffers
-                _mpi::allgather(send_buf, this->mpi_recv_buf);
-
-                //--- build array_4d
-                for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    const int   n_grid_out = this->get_n_grid_out(i_proc);
-                    const auto  index_out  = this->get_index_out( i_proc);
-                    const auto& recv_buf   = this->mpi_recv_buf[i_proc];
-
-                    this->_apply_4d_array_with_output_buffer_impl(array_4d,
-                                                                  recv_buf.data(),
-                                                                  n_grid_out,
-                                                                  index_out,
-                                                                  Apply4DInterface<complex_t, const complex_t, CopyFromBuffer>{},
-                                                                  CopyFromBuffer{} );
-                }
-            }
-
-            //--- internal table info (for debug)
-            void report_convert_matrix(){
-                switch (this->grid_type) {
-                    case FFT_GridType::c2c_3D:
-                        this->_prepare_3d_out_in_convert(true);
-                    break;
-
-                    case FFT_GridType::c2c_4D:
-                        _mpi::barrier();
-                        if(_mpi::get_rank() == 0){
-                            std::cout << "convert function is not implemented for c2c_4D." << std::endl;
-                        }
-                        _mpi::barrier();
-                    break;
-
-                    case FFT_GridType::r2c_3D:
-                        _mpi::barrier();
-                        if(_mpi::get_rank() == 0){
-                            std::cout << "convert function is not implemented for r2c_3D." << std::endl;
-                        }
-                        _mpi::barrier();
-                    break;
-
-                    case FFT_GridType::none:
-                        _mpi::barrier();
-                        if(_mpi::get_rank() == 0){
-                            std::cout << "OpenFFT is not initialized." << std::endl;
-                        }
-                        _mpi::barrier();
-                    break;
-
-                    default:
-                        throw std::logic_error("internal error: invalid grid type.");
-                }
-
             }
 
         private:
@@ -821,6 +822,24 @@ namespace OpenFFT {
                     std::ostringstream oss;
                     oss << "OpenFFT: grid type error. not initialized for " << grid_type << " FFT.\n"
                         << "   grid type = " << this->grid_type << "\n";
+                    throw std::logic_error(oss.str());
+                }
+            }
+            void _check_c2c_only() const {
+                if( this->grid_type != FFT_GridType::c2c_3D &&
+                    this->grid_type != FFT_GridType::c2c_4D   ){
+                    std::ostringstream oss;
+                    oss << "OpenFFT: grid type error. not initialized for c2c type FFT.\n"
+                        << "   grid type = " << this->grid_type << "\n";
+                    throw std::logic_error(oss.str());
+                }
+            }
+            void _check_3d_only() const {
+                if(this->grid_type != FFT_GridType::r2c_3D &&
+                   this->grid_type != FFT_GridType::c2c_3D   ){
+                       std::ostringstream oss;
+                       oss << "OpenFFT: grid type error. not initialized for 3D-FFT.\n"
+                           << "    grid type = " << this->grid_type << "\n";
                     throw std::logic_error(oss.str());
                 }
             }
@@ -845,13 +864,7 @@ namespace OpenFFT {
 
                 if(n_grid_in <= 0) return apply_func;
 
-                if(this->grid_type != FFT_GridType::r2c_3D &&
-                   this->grid_type != FFT_GridType::c2c_3D   ){
-                       std::ostringstream oss;
-                       oss << "OpenFFT: invalid operation. not initialized for 3D-FFT.\n"
-                           << "    grid type = " << this->grid_type << "\n";
-                    throw std::logic_error(oss.str());
-                }
+                this->_check_3d_only();
 
                 this->_check_nullptr(array_3d);
                 this->_check_nullptr(buffer);
@@ -922,13 +935,7 @@ namespace OpenFFT {
 
                 if(n_grid_out <= 0) return apply_func;
 
-                if(this->grid_type != FFT_GridType::r2c_3D &&
-                   this->grid_type != FFT_GridType::c2c_3D   ){
-                       std::ostringstream oss;
-                       oss << "OpenFFT: invalid operation. not initialized for 3D-FFT.\n"
-                           << "    grid type = " << this->grid_type << "\n";
-                    throw std::logic_error(oss.str());
-                }
+                this->_check_3d_only();
 
                 this->_check_nullptr(array_3d);
                 this->_check_nullptr(buffer);
@@ -1004,12 +1011,7 @@ namespace OpenFFT {
 
                 if(n_grid_in <= 0) return apply_func;
 
-                if(this->grid_type != FFT_GridType::c2c_4D ){
-                       std::ostringstream oss;
-                       oss << "OpenFFT: invalid operation. not initialized for 4D-FFT.\n"
-                           << "    grid type = " << this->grid_type << "\n";
-                    throw std::logic_error(oss.str());
-                }
+                this->_check_grid_type(FFT_GridType::c2c_4D);
 
                 this->_check_nullptr(array_4d);
                 this->_check_nullptr(buffer);
@@ -1132,14 +1134,9 @@ namespace OpenFFT {
                                                                     ApplyInterface  apply_interface,
                                                                     ApplyFunc       apply_func      ) const {
 
-            //    if(n_grid_out <= 0) return apply_func;
+                if(n_grid_out <= 0) return apply_func;
 
-                if(this->grid_type != FFT_GridType::c2c_4D ){
-                       std::ostringstream oss;
-                       oss << "OpenFFT: invalid operation. not initialized for 4D-FFT.\n"
-                           << "    grid type = " << this->grid_type << "\n";
-                    throw std::logic_error(oss.str());
-                }
+                this->_check_grid_type(FFT_GridType::c2c_4D);
 
                 this->_check_nullptr(array_4d);
                 this->_check_nullptr(buffer);
@@ -1261,208 +1258,215 @@ namespace OpenFFT {
                 _mpi::allgather(this->my_index_in  , this->index_in_list  );
                 _mpi::allgather(this->my_index_out , this->index_out_list );
 
-                this->mpi_send_index.resize(n_proc);
-                this->mpi_recv_index.resize(n_proc);
-                for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    this->mpi_send_index.at(i_proc).clear();
-                    this->mpi_recv_index.at(i_proc).clear();
-
-                    this->mpi_send_index.at(i_proc).reserve( this->get_n_grid_out(i_proc) );
-                    this->mpi_recv_index.at(i_proc).reserve( this->get_n_grid_out(i_proc) );
-                }
-
                 this->mpi_send_buf.resize(n_proc);
                 this->mpi_recv_buf.resize(n_proc);
             }
-            void _prepare_3d_out_in_convert(const bool report_matrix = false){
+
+            template <size_t Ndim>
+            void _prepare_convert(){
+                static_assert(Ndim == 3 or Ndim == 4);
+                this->_check_c2c_only();
+
                 const int n_proc  = _mpi::get_n_proc();
                 const int my_rank = _mpi::get_rank();
 
-                this->_collect_buffer_info();
+                const size_t n_grid_total = this->n_x
+                                          * this->n_y
+                                          * this->n_z
+                                          * std::max(this->n_w, 1);  // n_w == 0 in c2c_3D
+                const size_t n_reserve    = static_cast<size_t>( n_grid_total/(n_proc*n_proc) + 4 );
 
-                //--- build convert matrix
-                this->out_in_convert_matrix.resize( this->n_z * this->n_y * this->n_x );
+                this->convert_out_in_send_index.resize( n_proc );
+                this->convert_out_in_recv_index.resize( n_proc );
+                this->convert_in_out_send_index.resize( n_proc );
+                this->convert_in_out_recv_index.resize( n_proc );
 
-                //--- trace output -> input
+                std::vector< std::array<int, Ndim> > index_in_seq, index_out_seq;
+                index_in_seq.reserve( n_reserve);
+                index_out_seq.reserve(n_reserve);
+
+                //--- search between local output <-> other input
+                index_out_seq.resize( this->get_n_grid_out() );
+                this->gen_output_index_sequence(  index_out_seq.data()  );
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    const int       n_grid_out = this->n_grid_out_list[i_proc];
-                    const IndexList index_out  = this->index_out_list[i_proc];
+                    index_in_seq.resize( this->get_n_grid_in(i_proc) );
+                    this->gen_input_index_sequence( index_in_seq.data(), i_proc );
 
-                    this->index_array.resize(n_grid_out);
-                    for(int i=0; i<n_grid_out; ++i){
-                        auto& elem = this->index_array[i];
-                        elem.i_proc = i_proc;
-                        elem.index  = i;
-                    }
-
-                    this->_apply_3d_array_with_output_buffer_impl(this->out_in_convert_matrix.data(),
-                                                                  this->index_array.data(),
-                                                                  n_grid_out,
-                                                                  index_out,
-                                                                  Apply3DInterface<IndexMark, IndexMark, CopyFromBuffer>{},
-                                                                  CopyFromBuffer{} );
-                }
-
-                if(report_matrix){
-                    if(my_rank == 0){
-                        GenIndex3D get_3d_index;
-                        get_3d_index.set_grid(this->n_z, this->n_y, this->n_x);
-
-                        std::ostringstream oss;
-                        oss << " == out -> in convert_matrix ==   elem : [source_proc, source_index] " << "\n";
-                        for(int iz=0; iz<this->n_z; ++iz){
-                            oss << " iz = " << iz << ",\n";
-                            for(int iy=0; iy<this->n_y; ++iy){
-                                oss << "   (";
-                                for(int ix=0; ix<this->n_x; ++ix){
-                                    const auto elem = this->out_in_convert_matrix[ get_3d_index(iz, iy, ix) ];
-                                    oss << " [" << std::setw(2) << std::right << elem.i_proc << ","
-                                                << std::setw(2) << std::right << elem.index  << "]";
-                                }
-                                oss << " )\n";
+                    //------ make a projection of local output -> other input
+                    auto& send_out_in_index = this->convert_out_in_send_index[i_proc];
+                    send_out_in_index.clear();
+                    send_out_in_index.reserve(n_reserve);
+                    for(size_t ii=0; ii<index_out_seq.size(); ++ii){
+                        const auto index_out = index_out_seq[ii];
+                        for(size_t jj=0; jj<index_in_seq.size(); ++jj){
+                            if(index_out == index_in_seq[jj]){
+                                send_out_in_index.emplace_back(ii);
                             }
                         }
-                        std::cout << oss.str() << std::endl;
                     }
-                    _mpi::barrier();
+
+                    //------ make a projection of local output <- other input
+                    auto& recv_in_out_index = this->convert_in_out_recv_index[i_proc];
+                    recv_in_out_index.clear();
+                    recv_in_out_index.reserve(n_reserve);
+
+                    for(size_t ii=0; ii<index_in_seq.size(); ++ii){
+                        const auto index_in = index_in_seq[ii];
+                        for(size_t jj=0; jj<index_out_seq.size(); ++jj){
+                            if(index_in == index_out_seq[jj]){
+                                recv_in_out_index.emplace_back(jj);
+                            }
+                        }
+                    }
                 }
 
+                //--- search between local input <-> other output
+                index_in_seq.resize( this->get_n_grid_in() );
+                this->gen_input_index_sequence(  index_in_seq.data()  );
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    const int       n_grid_in = this->n_grid_in_list[i_proc];
-                    const IndexList index_in  = this->index_in_list[i_proc];
+                    index_out_seq.resize( this->get_n_grid_out(i_proc) );
+                    this->gen_output_index_sequence( index_out_seq.data(), i_proc );
 
-                    //--- get source index
-                    this->index_array.resize(n_grid_in);
-                    this->_apply_3d_array_with_input_buffer_impl(this->out_in_convert_matrix.data(),
-                                                                 this->index_array.data(),
-                                                                 n_grid_in,
-                                                                 index_in,
-                                                                 Apply3DInterface<IndexMark, IndexMark, CopyIntoBuffer>{},
-                                                                 CopyIntoBuffer{} );
+                    //------ make a projection of local input -> other output
+                    auto& send_in_out_index = this->convert_in_out_send_index[i_proc];
+                    send_in_out_index.clear();
+                    send_in_out_index.reserve(n_reserve);
 
-                    if(report_matrix){
-                        if(my_rank == 0){
-                            std::ostringstream oss;
-                            if(i_proc == 0) oss << " == source of input buffer == " << "\n";
-                            oss << "  proc = " << i_proc << ", len = " << n_grid_in << "\n";
-                            oss << "    (";
-                            for(int ii=0; ii<n_grid_in; ++ii){
-                                const auto elem = this->index_array[ii];
-                                oss << " [" << std::setw(2) << std::right << elem.i_proc << ","
-                                            << std::setw(2) << std::right << elem.index  << "]";
+                    for(size_t ii=0; ii<index_in_seq.size(); ++ii){
+                        const auto index_in = index_in_seq[ii];
+                        for(size_t jj=0; jj<index_out_seq.size(); ++jj){
+                            if(index_in == index_out_seq[jj]){
+                                send_in_out_index.emplace_back(ii);
                             }
-                            oss << " )\n";
-                            std::cout << oss.str() << std::flush;
                         }
-                        _mpi::barrier();
                     }
 
-                    //--- build send / recv index
-                    for(size_t ii=0; ii<this->index_array.size(); ++ii){
-                        const int source_proc  = this->index_array[ii].i_proc;
-                        const int source_index = this->index_array[ii].index;
+                    //------ make a projection of local input <- other output
+                    auto& recv_out_in_index = this->convert_out_in_recv_index[i_proc];
+                    recv_out_in_index.clear();
+                    recv_out_in_index.reserve(n_reserve);
 
-                        //--- send index
-                        if(source_proc == my_rank){
-                            this->mpi_send_index[i_proc].push_back(source_index);
-                        }
-
-                        //--- recv index
-                        if(i_proc == my_rank){
-                            this->mpi_recv_index[source_proc].push_back(ii);
+                    for(size_t ii=0; ii<index_out_seq.size(); ++ii){
+                        const auto index_out = index_out_seq[ii];
+                        for(size_t jj=0; jj<index_in_seq.size(); ++jj){
+                            if(index_out == index_in_seq[jj]){
+                                recv_out_in_index.emplace_back(jj);
+                            }
                         }
                     }
                 }
 
-                if(report_matrix){
-                    _mpi::barrier();
-                    if(my_rank == 0) std::cout << "\n";
-                    for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                        if(i_proc == my_rank){
-                            std::ostringstream oss;
-                            if(i_proc == 0) oss << " == mpi_send_index ==    elem : index of output_buffer" << "\n";
-                            oss << "   from proc = " << i_proc << ",\n";
-                            for(int j_proc=0; j_proc<n_proc; ++j_proc){
-                                oss << "      to proc = " << j_proc << ": ";
-                                const auto& list = this->mpi_send_index[j_proc];
-                                for(const auto& elem : list){
-                                    oss << " " << std::setw(2) << std::right << elem;
-                                }
-                                oss << "\n";
-                            }
-                            std::cout << oss.str() << std::endl;
-                        }
-                        _mpi::barrier();
-                    }
-                    _mpi::barrier();
-                    for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                        if(i_proc == my_rank){
-                            std::ostringstream oss;
-                            if(i_proc == 0) oss << " == mpi_recv_index ==    elem : index of input_buffer" << "\n";
-                            oss << "     at proc = " << i_proc << ",\n";
-                            for(int j_proc=0; j_proc<n_proc; ++j_proc){
-                                oss << "      from proc = " << j_proc << ": ";
-                                const auto& list = this->mpi_recv_index[j_proc];
-                                for(const auto& elem : list){
-                                    oss << " " << std::setw(2) << std::right << elem;
-                                }
-                                oss << "\n";
-                            }
-                            std::cout << oss.str() << std::endl;
-                        }
-                        _mpi::barrier();
-                    }
-                }
-
-                //--- check send & recv grid size
-                int n_grid = 0;
+                /*
+                //--- for in -> out convert
+                //------ make a projection of local input -> other output
+                index_in_seq.resize( this->get_n_grid_in() );
+                this->gen_input_index_sequence(  index_in_seq.data()  );
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    n_grid += this->mpi_send_index[i_proc].size();
+                    index_out_seq.resize( this->get_n_grid_out(i_proc) );
+                    this->gen_output_index_sequence( index_out_seq.data(), i_proc );
+
+                    auto& send_in_out_index = this->convert_in_out_send_index[i_proc];
+                    send_in_out_index.clear();
+                    send_in_out_index.reserve(n_reserve);
+
+                    for(size_t ii=0; ii<index_in_seq.size(); ++ii){
+                        const auto index_in = index_in_seq[ii];
+                        for(size_t jj=0; jj<index_out_seq.size(); ++jj){
+                            if(index_in == index_out_seq[jj]){
+                                send_in_out_index.emplace_back(ii);
+                            }
+                        }
+                    }
                 }
-                if( n_grid != this->get_n_grid_out() ){
+                */
+
+                /*
+                //------ make a projection of other input -> local output
+                index_out_seq.resize( this->get_n_grid_out() );
+                this->gen_output_index_sequence(  index_out_seq.data()  );
+                for(int i_proc=0; i_proc<n_proc; ++i_proc){
+                    index_in_seq.resize( this->get_n_grid_in(i_proc) );
+                    this->gen_input_index_sequence( index_in_seq.data(), i_proc );
+
+                    auto& recv_in_out_index = this->convert_in_out_recv_index[i_proc];
+                    recv_in_out_index.clear();
+                    recv_in_out_index.reserve(n_reserve);
+
+                    for(size_t ii=0; ii<index_in_seq.size(); ++ii){
+                        const auto index_in = index_in_seq[ii];
+                        for(size_t jj=0; jj<index_out_seq.size(); ++jj){
+                            if(index_in == index_out_seq[jj]){
+                                recv_in_out_index.emplace_back(jj);
+                            }
+                        }
+                    }
+                }
+                */
+
+                //--- check consistency
+                this->_check_convert_table();
+
+                //--- check MPI communicate is neccesary or not in convert arrays.
+                bool mpi_in_out_flag = false;
+                bool mpi_out_in_flag = false;
+                for(int i_proc=0; i_proc<n_proc; ++i_proc){
+                    if(i_proc == my_rank) continue;
+                    if(this->convert_in_out_send_index.at(i_proc).size() > 0) mpi_in_out_flag = true;
+                    if(this->convert_out_in_send_index.at(i_proc).size() > 0) mpi_out_in_flag = true;
+                }
+                this->convert_in_out_mpi_flag = _mpi::sync_OR(mpi_in_out_flag);
+                this->convert_out_in_mpi_flag = _mpi::sync_OR(mpi_out_in_flag);
+
+                //--- preparing for convert was completed
+                this->convert_flag = true;
+            }
+
+            void _check_convert_table() const {
+                const int n_proc  = _mpi::get_n_proc();
+
+                //--- check send grid size
+                int n_grid_in  = 0;
+                int n_grid_out = 0;
+                for(int i_proc=0; i_proc<n_proc; ++i_proc){
+                    n_grid_in  += this->convert_in_out_send_index.at(i_proc).size();
+                    n_grid_out += this->convert_out_in_send_index.at(i_proc).size();
+                }
+                if( n_grid_in != this->get_n_grid_in() ){
                     std::ostringstream oss;
-                    oss << "internal error: failure to make mpi_send_index\n"
-                        << "   total len = " << n_grid
+                    oss << "internal error: failure to make 'convert_in_out_send_index'\n"
+                        << "   total len = " << n_grid_in
+                        << ", must be = " << this->get_n_grid_in() << " (= n_grid_in).\n";
+                    throw std::logic_error(oss.str());
+                }
+                if( n_grid_out != this->get_n_grid_out() ){
+                    std::ostringstream oss;
+                    oss << "internal error: failure to make 'convert_out_in_send_index'\n"
+                        << "   total len = " << n_grid_out
                         << ", must be = " << this->get_n_grid_out() << " (= n_grid_out).\n";
                     throw std::logic_error(oss.str());
                 }
 
-                n_grid = 0;
+                //--- check recv grid size
+                n_grid_in  = 0;
+                n_grid_out = 0;
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    n_grid += this->mpi_recv_index[i_proc].size();
+                    n_grid_in  += this->convert_out_in_recv_index.at(i_proc).size();
+                    n_grid_out += this->convert_in_out_recv_index.at(i_proc).size();
                 }
-                if( n_grid != this->get_n_grid_in() ){
+                if( n_grid_in != this->get_n_grid_in() ){
                     std::ostringstream oss;
-                    oss << "internal error: failure to make mpi_recv_index\n"
-                        << "   total len = " << n_grid
+                    oss << "internal error: failure to make 'convert_out_in_recv_index'\n"
+                        << "   total len = " << n_grid_in
                         << ", must be = " << this->get_n_grid_in() << " (= n_grid_in).\n";
                     throw std::logic_error(oss.str());
                 }
-
-                //--- check MPI communicate is neccesary or not for convert arrays.
-                bool mpi_flag = false;
-                for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    if(i_proc == my_rank) continue;
-                    if(this->mpi_send_index[i_proc].size() > 0) mpi_flag = true;
+                if( n_grid_out != this->get_n_grid_out() ){
+                    std::ostringstream oss;
+                    oss << "internal error: failure to make 'convert_in_out_recv_index'\n"
+                        << "   total len = " << n_grid_out
+                        << ", must be = " << this->get_n_grid_out() << " (= n_grid_out).\n";
+                    throw std::logic_error(oss.str());
                 }
-                this->out_in_convert_mpi_flag = _mpi::sync_OR(mpi_flag);
-
-                if(report_matrix){
-                    _mpi::barrier();
-                    for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                        if(i_proc == my_rank){
-                            if(this->out_in_convert_mpi_flag){
-                                std::cout << " -- convert with MPI Alltoall at proc=" << my_rank << std::endl;
-                            } else {
-                                std::cout << " -- convert in local at proc=" << my_rank << std::endl;
-                            }
-                        }
-                        _mpi::barrier();
-                    }
-                }
-
-                //--- preparing for convert was completed
-                this->out_in_convert_flag = true;
             }
         };
 

@@ -135,12 +135,22 @@ namespace OpenFFT {
         //--- elapsed time
         inline double get_time() const { return _impl::fp64_global_mngr.get_time(); }
 
+        //--- grid info
+        FFT_GridType get_grid_type() const { return _impl::fp64_global_mngr.get_grid_type(); }
+
+        void get_grid_size(int &nz, int &ny, int &nx) const {
+            _impl::fp64_global_mngr.get_grid_size(nz, ny, nx);
+        }
+        void get_grid_size(int &nw, int &nz, int &ny, int &nx) const {
+            _impl::fp64_global_mngr.get_grid_size(nw, nz, ny, nx);
+        }
+
         //----------------------------------------------------------------------
         //    FFT & IFFT wrapper
         //----------------------------------------------------------------------
         template <class Alloc_f, class Alloc_c>
-        void fft_r2c_3d_forward(std::vector<float_t  , Alloc_f> &input,
-                                std::vector<complex_t, Alloc_c> &output){
+        void fft_r2c_forward(std::vector<float_t  , Alloc_f> &input,
+                             std::vector<complex_t, Alloc_c> &output){
 
             //--- check buffer size
             this->_reserve_buffer_capacity(input);
@@ -150,16 +160,16 @@ namespace OpenFFT {
             output.resize(this->get_n_grid_out());
 
             //--- perform FFT
-            this->fft_r2c_3d_forward(input.data(), output.data());
+            this->fft_r2c_forward(input.data(), output.data());
         }
-        void fft_r2c_3d_forward(float_t   *input,
-                                complex_t *output){
-            _impl::fp64_global_mngr.fft_r2c_3d_forward(input, output);
+        void fft_r2c_forward(float_t   *input,
+                             complex_t *output){
+            _impl::fp64_global_mngr.fft_r2c_forward(input, output);
         }
 
         template <class Alloc_L, class Alloc_R>
-        void fft_c2c_3d_forward(std::vector<complex_t, Alloc_L> &input,
-                                std::vector<complex_t, Alloc_R> &output){
+        void fft_c2c_forward(std::vector<complex_t, Alloc_L> &input,
+                             std::vector<complex_t, Alloc_R> &output){
 
             //--- check buffer size
             this->_reserve_buffer_capacity(input);
@@ -169,15 +179,15 @@ namespace OpenFFT {
             output.resize(this->get_n_grid_out());
 
             //--- perform FFT
-            this->fft_c2c_3d_forward(input.data(), output.data());
+            this->fft_c2c_forward(input.data(), output.data());
         }
-        void fft_c2c_3d_forward(complex_t *input,
-                                complex_t *output){
-            _impl::fp64_global_mngr.fft_c2c_3d_forward(input, output);
+        void fft_c2c_forward(complex_t *input,
+                             complex_t *output){
+            _impl::fp64_global_mngr.fft_c2c_forward(input, output);
         }
         template <class Alloc_L, class Alloc_R>
-        void fft_c2c_3d_backward(std::vector<complex_t, Alloc_L> &input,
-                                 std::vector<complex_t, Alloc_R> &output){
+        void fft_c2c_backward(std::vector<complex_t, Alloc_L> &input,
+                              std::vector<complex_t, Alloc_R> &output){
 
             //--- check buffer size
             this->_reserve_buffer_capacity(input);
@@ -187,483 +197,276 @@ namespace OpenFFT {
             output.resize(this->get_n_grid_out());
 
             //--- perform FFT
-            this->fft_c2c_3d_backward(input.data(), output.data());
+            this->fft_c2c_backward(input.data(), output.data());
         }
-        void fft_c2c_3d_backward(complex_t *input,
-                                 complex_t *output){
-            _impl::fp64_global_mngr.fft_c2c_3d_backward(input, output);
+        void fft_c2c_backward(complex_t *input,
+                              complex_t *output){
+            _impl::fp64_global_mngr.fft_c2c_backward(input, output);
         }
-
-
-        template <class Alloc_L, class Alloc_R>
-        void fft_c2c_4d_forward(std::vector<complex_t, Alloc_L> &input,
-                                std::vector<complex_t, Alloc_R> &output){
-
-            //--- check buffer size
-            this->_reserve_buffer_capacity(input);
-            this->_reserve_buffer_capacity(output);
-            //--- check data length
-            this->_check_buffer_length(input, this->get_n_grid_in());
-            output.resize(this->get_n_grid_out());
-
-            //--- perform FFT
-            this->fft_c2c_4d_forward(input.data(), output.data());
-        }
-        void fft_c2c_4d_forward(complex_t *input,
-                                complex_t *output){
-            _impl::fp64_global_mngr.fft_c2c_4d_forward(input, output);
-        }
-        /*  under developping
-        template <class Alloc_L, class Alloc_R>
-        void fft_c2c_4d_backward(std::vector<complex_t, Alloc_L> &input,
-                                 std::vector<complex_t, Alloc_R> &output){
-
-            //--- check buffer size
-            this->_reserve_buffer_capacity(input);
-            this->_reserve_buffer_capacity(output);
-            //--- check data length
-            this->_check_buffer_length(input, this->get_n_grid_in());
-            output.resize(this->get_n_grid_out());
-
-            //--- perform FFT
-            this->fft_c2c_4d_backward(input.data(), output.data());
-        }
-        void fft_c2c_4d_backward(complex_t *input,
-                                 complex_t *output){
-            _impl::fp64_global_mngr.fft_c2c_4d_backward(input, output);
-        }
-        */
 
         //----------------------------------------------------------------------
-        //    input buffer manipulator (3D)
+        //    input buffer manipulator
         //----------------------------------------------------------------------
         //--- at local process
-        template <class T_3d ,
+        template <class T_arr,
                   class T_buf, class Alloc_buf>
-        void copy_3d_array_into_input_buffer(const T_3d                          *array_3d,
-                                                   std::vector<T_buf, Alloc_buf> &buffer   ) const {
+        void copy_array_into_input_buffer(const T_arr                         *array,
+                                                std::vector<T_buf, Alloc_buf> &buffer) const {
             buffer.resize(this->get_n_grid_in());
-            this->copy_3d_array_into_input_buffer(array_3d, buffer.data());
+            this->copy_array_into_input_buffer(array, buffer.data());
         }
-        template <class T_3d ,
+        template <class T_arr,
                   class T_buf >
-        void copy_3d_array_into_input_buffer(const T_3d  *array_3d,
-                                                   T_buf *buffer   ) const {
-            this->apply_3d_array_with_input_buffer(array_3d, buffer, CopyIntoBuffer{});
+        void copy_array_into_input_buffer(const T_arr *array,
+                                                T_buf *buffer) const {
+            this->apply_array_with_input_buffer(array, buffer, CopyIntoBuffer{});
         }
-        template <class T_3d ,
+
+        template <class T_arr,
                   class T_buf, class Alloc_buf,
                   class ApplyFunc >
-        ApplyFunc apply_3d_array_with_input_buffer(T_3d                          *array_3d,
-                                                   std::vector<T_buf, Alloc_buf> &buffer,
-                                                   ApplyFunc                      func     ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_in());
-            return this->apply_3d_array_with_input_buffer(array_3d, buffer.data(), func);
-        }
-        template <class T_3d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_3d_array_with_input_buffer(T_3d                                *array_3d,
-                                                   const std::vector<T_buf, Alloc_buf> &buffer,
-                                                   ApplyFunc                            func     ) const {
+        ApplyFunc apply_array_with_input_buffer(      T_arr                         *array,
+                                                const std::vector<T_buf, Alloc_buf> &buffer,
+                                                      ApplyFunc                      func   ) const {
             this->_check_buffer_length(buffer, this->get_n_grid_in());
             const T_buf* buf_ptr = buffer.data();
-            return this->apply_3d_array_with_input_buffer(array_3d, buf_ptr, func);
+            return this->apply_array_with_input_buffer(array, buf_ptr, func);
         }
-        template <class T_3d ,
+        template <class T_arr,
+                  class T_buf, class Alloc_buf,
+                  class ApplyFunc >
+        ApplyFunc apply_array_with_input_buffer(T_arr                         *array,
+                                                std::vector<T_buf, Alloc_buf> &buffer,
+                                                ApplyFunc                      func   ) const {
+            this->_check_buffer_length(buffer, this->get_n_grid_in());
+            return this->apply_array_with_input_buffer(array, buffer.data(), func);
+        }
+        template <class T_arr,
                   class T_buf,
                   class ApplyFunc >
-        ApplyFunc apply_3d_array_with_input_buffer(T_3d      *array_3d,
-                                                   T_buf     *buffer,
-                                                   ApplyFunc  func     ) const {
-            return _impl::fp64_global_mngr.apply_3d_array_with_input_buffer(array_3d, buffer, func);
+        ApplyFunc apply_array_with_input_buffer(T_arr     *array,
+                                                T_buf     *buffer,
+                                                ApplyFunc  func   ) const {
+            return _impl::fp64_global_mngr.apply_array_with_input_buffer(array, buffer, func);
         }
 
         //--- for other process data part (if needed)
-        template <class T_3d ,
+        template <class T_arr,
                   class T_buf, class Alloc_buf,
                   class ApplyFunc >
-        ApplyFunc apply_3d_array_with_input_buffer(      T_3d                          *array_3d,
-                                                         std::vector<T_buf, Alloc_buf> &buffer,
-                                                         ApplyFunc                      func,
-                                                   const int                            i_proc) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_in(i_proc));
-            return this->apply_3d_array_with_input_buffer(array_3d, buffer.data(), func, i_proc);
-        }
-        template <class T_3d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_3d_array_with_input_buffer(      T_3d                          *array_3d,
-                                                   const std::vector<T_buf, Alloc_buf> &buffer,
-                                                         ApplyFunc                      func,
-                                                   const int                            i_proc) const {
+        ApplyFunc apply_array_with_input_buffer(      T_arr                         *array,
+                                                const std::vector<T_buf, Alloc_buf> &buffer,
+                                                      ApplyFunc                      func,
+                                                const int                            i_proc) const {
             this->_check_buffer_length(buffer, this->get_n_grid_in(i_proc));
             const T_buf* buf_ptr = buffer.data();
-            return this->apply_3d_array_with_input_buffer(array_3d, buf_ptr, func, i_proc);
+            return this->apply_array_with_input_buffer(array, buf_ptr, func, i_proc);
         }
-        template <class T_3d ,
+        template <class T_arr,
+                  class T_buf, class Alloc_buf,
+                  class ApplyFunc >
+        ApplyFunc apply_array_with_input_buffer(      T_arr                         *array,
+                                                      std::vector<T_buf, Alloc_buf> &buffer,
+                                                      ApplyFunc                      func,
+                                                const int                            i_proc ) const {
+            this->_check_buffer_length(buffer, this->get_n_grid_in(i_proc));
+            return this->apply_array_with_input_buffer(array, buffer.data(), func, i_proc);
+        }
+        template <class T_arr,
                   class T_buf,
                   class ApplyFunc >
-        ApplyFunc apply_3d_array_with_input_buffer(      T_3d      *array_3d,
-                                                         T_buf     *buffer,
-                                                         ApplyFunc  func,
-                                                   const int        i_proc   ) const {
-            return _impl::fp64_global_mngr.apply_3d_array_with_input_buffer(array_3d, buffer, func, i_proc);
+        ApplyFunc apply_array_with_input_buffer(      T_arr     *array,
+                                                      T_buf     *buffer,
+                                                      ApplyFunc  func,
+                                                const int        i_proc ) const {
+            return _impl::fp64_global_mngr.apply_array_with_input_buffer(array, buffer, func, i_proc);
         }
 
         //----------------------------------------------------------------------
-        //    output buffer manipulator (3D)
+        //    output buffer manipulator
         //----------------------------------------------------------------------
         //--- at local process
-        template <class T_3d ,
+        template <class T_arr,
                   class T_buf, class Alloc_buf>
-        void copy_3d_array_from_output_buffer(      T_3d                          *array_3d,
-                                              const std::vector<T_buf, Alloc_buf> &buffer   ) const {
+        void copy_array_from_output_buffer(      T_arr                         *array,
+                                           const std::vector<T_buf, Alloc_buf> &buffer) const {
             this->_check_buffer_length(buffer, this->get_n_grid_out());
             const T_buf* buf_ptr = buffer.data();
-            this->copy_3d_array_from_output_buffer(array_3d, buf_ptr);
+            this->copy_array_from_output_buffer(array, buf_ptr);
         }
-        template <class T_3d ,
+        template <class T_arr,
                   class T_buf >
-        void copy_3d_array_from_output_buffer(      T_3d  *array_3d,
-                                              const T_buf *buffer   ) const {
-            this->apply_3d_array_with_output_buffer(array_3d, buffer, CopyFromBuffer{});
+        void copy_array_from_output_buffer(      T_arr *array,
+                                           const T_buf *buffer) const {
+            this->apply_array_with_output_buffer(array, buffer, CopyFromBuffer{});
         }
-        template <class T_3d ,
+
+        template <class T_arr,
                   class T_buf, class Alloc_buf,
                   class ApplyFunc >
-        ApplyFunc apply_3d_array_with_output_buffer(T_3d                          *array_3d,
-                                                    std::vector<T_buf, Alloc_buf> &buffer,
-                                                    ApplyFunc                      func     ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_out());
-            return this->apply_3d_array_with_output_buffer(array_3d, buffer.data(), func);
-        }
-        template <class T_3d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_3d_array_with_output_buffer(T_3d                                *array_3d,
-                                                    const std::vector<T_buf, Alloc_buf> &buffer,
-                                                    ApplyFunc                            func     ) const {
+        ApplyFunc apply_array_with_output_buffer(      T_arr                         *array,
+                                                 const std::vector<T_buf, Alloc_buf> &buffer,
+                                                       ApplyFunc                      func   ) const {
             this->_check_buffer_length(buffer, this->get_n_grid_out());
             const T_buf* buf_ptr = buffer.data();
-            return this->apply_3d_array_with_output_buffer(array_3d, buf_ptr, func);
+            return this->apply_array_with_output_buffer(array, buf_ptr, func);
         }
-        template <class T_3d ,
+        template <class T_arr,
+                  class T_buf, class Alloc_buf,
+                  class ApplyFunc >
+        ApplyFunc apply_array_with_output_buffer(T_arr                         *array,
+                                                 std::vector<T_buf, Alloc_buf> &buffer,
+                                                 ApplyFunc                      func   ) const {
+            this->_check_buffer_length(buffer, this->get_n_grid_out());
+            return this->apply_array_with_output_buffer(array, buffer.data(), func);
+        }
+        template <class T_arr,
                   class T_buf,
                   class ApplyFunc >
-        ApplyFunc apply_3d_array_with_output_buffer(T_3d      *array_3d,
-                                                    T_buf     *buffer,
-                                                    ApplyFunc  func     ) const {
-            return _impl::fp64_global_mngr.apply_3d_array_with_output_buffer(array_3d, buffer, func);
+        ApplyFunc apply_array_with_output_buffer(T_arr     *array,
+                                                 T_buf     *buffer,
+                                                 ApplyFunc  func     ) const {
+            return _impl::fp64_global_mngr.apply_array_with_output_buffer(array, buffer, func);
         }
 
         //--- for other process data part (if needed)
-        template <class T_3d ,
+        template <class T_arr,
                   class T_buf, class Alloc_buf,
                   class ApplyFunc >
-        ApplyFunc apply_3d_array_with_output_buffer(      T_3d                          *array_3d,
-                                                          std::vector<T_buf, Alloc_buf> &buffer,
-                                                          ApplyFunc                      func,
-                                                    const int                            i_proc   ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_out(i_proc));
-            return this->apply_3d_array_with_output_buffer(array_3d, buffer.data(), func, i_proc);
-        }
-        template <class T_3d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_3d_array_with_output_buffer(      T_3d                          *array_3d,
-                                                    const std::vector<T_buf, Alloc_buf> &buffer,
-                                                          ApplyFunc                      func,
-                                                    const int                            i_proc   ) const {
+        ApplyFunc apply_array_with_output_buffer(      T_arr                         *array,
+                                                 const std::vector<T_buf, Alloc_buf> &buffer,
+                                                       ApplyFunc                      func,
+                                                 const int                            i_proc   ) const {
             this->_check_buffer_length(buffer, this->get_n_grid_out(i_proc));
             const T_buf* buf_ptr = buffer.data();
-            return this->apply_3d_array_with_output_buffer(array_3d, buf_ptr, func, i_proc);
+            return this->apply_array_with_output_buffer(array, buf_ptr, func, i_proc);
         }
-        template <class T_3d ,
-                  class T_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_3d_array_with_output_buffer(      T_3d      *array_3d,
-                                                          T_buf     *buffer,
-                                                          ApplyFunc  func,
-                                                    const int        i_proc) const {
-            return _impl::fp64_global_mngr.apply_3d_array_with_output_buffer(array_3d, buffer, func, i_proc);
-        }
-
-        //----------------------------------------------------------------------
-        //    input buffer manipulator (4D)
-        //----------------------------------------------------------------------
-        //--- at local process
-        template <class T_4d ,
-                  class T_buf, class Alloc_buf>
-        void copy_4d_array_into_input_buffer(const T_4d                          *array_4d,
-                                                   std::vector<T_buf, Alloc_buf> &buffer   ) const {
-            buffer.resize(this->get_n_grid_in());
-            this->copy_4d_array_into_input_buffer(array_4d, buffer.data());
-        }
-        template <class T_4d ,
-                  class T_buf >
-        void copy_4d_array_into_input_buffer(const T_4d  *array_4d,
-                                                   T_buf *buffer   ) const {
-            this->apply_4d_array_with_input_buffer(array_4d, buffer, CopyIntoBuffer{});
-        }
-        template <class T_4d ,
+        template <class T_arr,
                   class T_buf, class Alloc_buf,
                   class ApplyFunc >
-        ApplyFunc apply_4d_array_with_input_buffer(T_4d                          *array_4d,
-                                                   std::vector<T_buf, Alloc_buf> &buffer,
-                                                   ApplyFunc                      func     ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_in());
-            return this->apply_4d_array_with_input_buffer(array_4d, buffer.data(), func);
-        }
-        template <class T_4d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_input_buffer(      T_4d                          *array_4d,
-                                                   const std::vector<T_buf, Alloc_buf> &buffer,
-                                                         ApplyFunc                      func     ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_in());
-            const T_buf* buf_ptr = buffer.data();
-            return this->apply_4d_array_with_input_buffer(array_4d, buf_ptr, func);
-        }
-        template <class T_4d ,
-                  class T_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_input_buffer(T_4d      *array_4d,
-                                                   T_buf     *buffer,
-                                                   ApplyFunc  func     ) const {
-            return _impl::fp64_global_mngr.apply_4d_array_with_input_buffer(array_4d, buffer, func);
-        }
-
-        //--- for other process data part (if needed)
-        template <class T_4d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_input_buffer(      T_4d                          *array_4d,
-                                                         std::vector<T_buf, Alloc_buf> &buffer,
-                                                         ApplyFunc                      func,
-                                                   const int                            i_proc   ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_in(i_proc));
-            return this->apply_4d_array_with_input_buffer(array_4d, buffer.data(), func, i_proc);
-        }
-        template <class T_4d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_input_buffer(      T_4d                          *array_4d,
-                                                   const std::vector<T_buf, Alloc_buf> &buffer,
-                                                         ApplyFunc                      func,
-                                                   const int                            i_proc   ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_in(i_proc));
-            const T_buf* buf_ptr = buffer.data();
-            return this->apply_4d_array_with_input_buffer(array_4d, buf_ptr, func, i_proc);
-        }
-        template <class T_4d ,
-                  class T_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_input_buffer(      T_4d      *array_4d,
-                                                         T_buf     *buffer,
-                                                         ApplyFunc  func,
-                                                   const int        i_proc   ) const {
-            return _impl::fp64_global_mngr.apply_4d_array_with_input_buffer(array_4d, buffer, func, i_proc);
-        }
-
-        //----------------------------------------------------------------------
-        //    output buffer manipulator (4D)
-        //----------------------------------------------------------------------
-        //--- at local process
-        template <class T_4d ,
-                  class T_buf, class Alloc_buf>
-        void copy_4d_array_from_output_buffer(      T_4d                          *array_4d,
-                                              const std::vector<T_buf, Alloc_buf> &buffer   ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_out());
-            const T_buf* buf_ptr = buffer.data();
-            this->copy_4d_array_from_output_buffer(array_4d, buf_ptr);
-        }
-        template <class T_4d ,
-                  class T_buf >
-        void copy_4d_array_from_output_buffer(      T_4d  *array_4d,
-                                              const T_buf *buffer   ) const {
-            this->apply_4d_array_with_output_buffer(array_4d, buffer, CopyFromBuffer{});
-        }
-        template <class T_4d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_output_buffer(T_4d                          *array_4d,
-                                                    std::vector<T_buf, Alloc_buf> &buffer,
-                                                    ApplyFunc                      func     ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_out());
-            return this->apply_4d_array_with_output_buffer(array_4d, buffer.data(), func);
-        }
-        template <class T_4d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_output_buffer(      T_4d                          *array_4d,
-                                                    const std::vector<T_buf, Alloc_buf> &buffer,
-                                                          ApplyFunc                      func     ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_out());
-            const T_buf* buf_ptr = buffer.data();
-            return this->apply_4d_array_with_output_buffer(array_4d, buf_ptr, func);
-        }
-        template <class T_4d ,
-                  class T_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_output_buffer(T_4d      *array_4d,
-                                                    T_buf     *buffer,
-                                                    ApplyFunc  func     ) const {
-            return _impl::fp64_global_mngr.apply_4d_array_with_output_buffer(array_4d, buffer, func);
-        }
-
-        //--- for other process data part (if needed)
-        template <class T_4d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_output_buffer(      T_4d                          *array_4d,
-                                                          std::vector<T_buf, Alloc_buf> &buffer,
-                                                          ApplyFunc                      func,
-                                                    const int                            i_proc   ) const {
+        ApplyFunc apply_array_with_output_buffer(      T_arr                         *array,
+                                                       std::vector<T_buf, Alloc_buf> &buffer,
+                                                       ApplyFunc                      func,
+                                                 const int                            i_proc ) const {
             this->_check_buffer_length(buffer, this->get_n_grid_out(i_proc));
-            return this->apply_4d_array_with_output_buffer(array_4d, buffer.data(), func, i_proc);
+            return this->apply_array_with_output_buffer(array, buffer.data(), func, i_proc);
         }
-        template <class T_4d ,
-                  class T_buf, class Alloc_buf,
-                  class ApplyFunc >
-        ApplyFunc apply_4d_array_with_output_buffer(      T_4d                          *array_4d,
-                                                    const std::vector<T_buf, Alloc_buf> &buffer,
-                                                          ApplyFunc                      func,
-                                                    const int                            i_proc   ) const {
-            this->_check_buffer_length(buffer, this->get_n_grid_out(i_proc));
-            const T_buf* buf_ptr = buffer.data();
-            return this->apply_4d_array_with_output_buffer(array_4d, buf_ptr, func, i_proc);
-        }
-        template <class T_4d ,
+        template <class T_arr,
                   class T_buf,
                   class ApplyFunc >
-        ApplyFunc apply_4d_array_with_output_buffer(      T_4d      *array_4d,
-                                                          T_buf     *buffer,
-                                                          ApplyFunc  func,
-                                                    const int        i_proc   ) const {
-            return _impl::fp64_global_mngr.apply_4d_array_with_output_buffer(array_4d, buffer, func, i_proc);
+        ApplyFunc apply_array_with_output_buffer(      T_arr     *array,
+                                                       T_buf     *buffer,
+                                                       ApplyFunc  func,
+                                                 const int        i_proc) const {
+            return _impl::fp64_global_mngr.apply_array_with_output_buffer(array, buffer, func, i_proc);
         }
 
         //----------------------------------------------------------------------
         //    index sequence generator
         //----------------------------------------------------------------------
         template <class Alloc_seq>
-        void gen_3d_input_index_sequence(std::vector<std::array<int, 3>, Alloc_seq> &index_seq) const {
+        void gen_input_index_sequence(std::vector<std::array<int, 3>, Alloc_seq> &index_seq) const {
             index_seq.resize( this->get_n_grid_in() );
-            _impl::fp64_global_mngr.gen_3d_input_index_sequence( index_seq.data() );
+            _impl::fp64_global_mngr.gen_input_index_sequence( index_seq.data() );
         }
         template <class Alloc_seq>
-        void gen_3d_input_index_sequence(      std::vector<std::array<int, 3>, Alloc_seq> &index_seq,
-                                         const int                                         i_proc    ) const {
+        void gen_input_index_sequence(      std::vector<std::array<int, 3>, Alloc_seq> &index_seq,
+                                      const int                                         i_proc    ) const {
             index_seq.resize( this->get_n_grid_in(i_proc) );
-            _impl::fp64_global_mngr.gen_3d_input_index_sequence(index_seq.data(), i_proc);
+            _impl::fp64_global_mngr.gen_input_index_sequence(index_seq.data(), i_proc);
         }
         template <class Alloc_seq>
-        void gen_3d_output_index_sequence(std::vector<std::array<int, 3>, Alloc_seq> &index_seq) const {
+        void gen_output_index_sequence(std::vector<std::array<int, 3>, Alloc_seq> &index_seq) const {
             index_seq.resize( this->get_n_grid_out() );
-            _impl::fp64_global_mngr.gen_3d_output_index_sequence( index_seq.data() );
+            _impl::fp64_global_mngr.gen_output_index_sequence( index_seq.data() );
         }
         template <class Alloc_seq>
-        void gen_3d_output_index_sequence(      std::vector<std::array<int, 3>, Alloc_seq> &index_seq,
-                                          const int                                         i_proc    ) const {
+        void gen_output_index_sequence(      std::vector<std::array<int, 3>, Alloc_seq> &index_seq,
+                                       const int                                         i_proc    ) const {
             index_seq.resize( this->get_n_grid_out(i_proc) );
-            _impl::fp64_global_mngr.gen_3d_output_index_sequence(index_seq.data(), i_proc);
+            _impl::fp64_global_mngr.gen_output_index_sequence(index_seq.data(), i_proc);
         }
 
         template <class Alloc_seq>
-        void gen_4d_input_index_sequence(std::vector<std::array<int, 4>, Alloc_seq> &index_seq) const {
+        void gen_input_index_sequence(std::vector<std::array<int, 4>, Alloc_seq> &index_seq) const {
             index_seq.resize( this->get_n_grid_in() );
-            _impl::fp64_global_mngr.gen_4d_input_index_sequence( index_seq.data() );
+            _impl::fp64_global_mngr.gen_input_index_sequence( index_seq.data() );
         }
         template <class Alloc_seq>
-        void gen_4d_input_index_sequence(      std::vector<std::array<int, 4>, Alloc_seq> &index_seq,
-                                         const int                                         i_proc    ) const {
+        void gen_input_index_sequence(      std::vector<std::array<int, 4>, Alloc_seq> &index_seq,
+                                      const int                                         i_proc    ) const {
             index_seq.resize( this->get_n_grid_in(i_proc) );
-            _impl::fp64_global_mngr.gen_4d_input_index_sequence(index_seq.data(), i_proc);
+            _impl::fp64_global_mngr.gen_input_index_sequence(index_seq.data(), i_proc);
         }
         template <class Alloc_seq>
-        void gen_4d_output_index_sequence(std::vector<std::array<int, 4>, Alloc_seq> &index_seq) const {
+        void gen_output_index_sequence(std::vector<std::array<int, 4>, Alloc_seq> &index_seq) const {
             index_seq.resize( this->get_n_grid_out() );
-            _impl::fp64_global_mngr.gen_4d_output_index_sequence( index_seq.data() );
+            _impl::fp64_global_mngr.gen_output_index_sequence( index_seq.data() );
         }
         template <class Alloc_seq>
-        void gen_4d_output_index_sequence(      std::vector<std::array<int, 4>, Alloc_seq> &index_seq,
-                                          const int                                         i_proc    ) const {
+        void gen_output_index_sequence(      std::vector<std::array<int, 4>, Alloc_seq> &index_seq,
+                                       const int                                         i_proc    ) const {
             index_seq.resize( this->get_n_grid_out(i_proc) );
-            _impl::fp64_global_mngr.gen_4d_output_index_sequence(index_seq.data(), i_proc);
+            _impl::fp64_global_mngr.gen_output_index_sequence(index_seq.data(), i_proc);
         }
 
         //----------------------------------------------------------------------
-        //    output_buffer to input_buffer converter
+        //    transposer between output_buffer and input_buffer
         //----------------------------------------------------------------------
         template <class Alloc_L, class Alloc_R>
-        void convert_output_to_input(      std::vector<complex_t, Alloc_L> &input_buf,
-                                     const std::vector<complex_t, Alloc_R> &output_buf){
+        void transpose_input_to_output(const std::vector<complex_t, Alloc_L> &input_buf,
+                                             std::vector<complex_t, Alloc_R> &output_buf){
+
+            //--- check buffer size
+            this->_check_buffer_length( input_buf, this->get_n_grid_in() );
+            output_buf.resize( this->get_n_grid_out() );
+
+            this->transpose_input_to_output(input_buf.data(), output_buf.data());
+        }
+        void transpose_input_to_output(const complex_t *input_buf,
+                                             complex_t *output_buf){
+            _impl::fp64_global_mngr.transpose_input_to_output(input_buf, output_buf);
+        }
+        template <class Alloc_L, class Alloc_R>
+        void transpose_output_to_input(const std::vector<complex_t, Alloc_L> &output_buf,
+                                             std::vector<complex_t, Alloc_R> &input_buf ){
 
             //--- check buffer size
             this->_check_buffer_length( output_buf, this->get_n_grid_out() );
             input_buf.resize( this->get_n_grid_in() );
 
-            this->convert_output_to_input(input_buf.data(), output_buf.data());
+            this->transpose_output_to_input(output_buf.data(), input_buf.data());
         }
-        void convert_output_to_input(      complex_t *input_buf,
-                                     const complex_t *output_buf){
-            _impl::fp64_global_mngr.convert_output_to_input(input_buf, output_buf);
+        void transpose_output_to_input(const complex_t *output_buf,
+                                             complex_t *input_buf ){
+            _impl::fp64_global_mngr.transpose_output_to_input(output_buf, input_buf);
         }
 
         //----------------------------------------------------------------------
         //    gather inferface for global 3D/4D array from output_buffer
         //----------------------------------------------------------------------
         template <class Alloc>
-        void gather_3d_array(      complex_t                     *array_3d,
-                             const std::vector<complex_t, Alloc> &output_buf,
-                             const int                            tgt_proc   ){
+        void gather_array(      complex_t                     *array,
+                          const std::vector<complex_t, Alloc> &output_buf,
+                          const int                            tgt_proc   ){
             this->_check_buffer_length(output_buf, this->get_n_grid_out());
-            this->gather_3d_array(array_3d, output_buf.data(), tgt_proc);
+            this->gather_array(array, output_buf.data(), tgt_proc);
         }
-        void gather_3d_array(      complex_t *array_3d,
-                             const complex_t *output_buf,
-                             const int        tgt_proc   ){
-            _impl::fp64_global_mngr.gather_3d_array(array_3d, output_buf, tgt_proc);
+        void gather_array(      complex_t *array,
+                          const complex_t *output_buf,
+                          const int        tgt_proc   ){
+            _impl::fp64_global_mngr.gather_array(array, output_buf, tgt_proc);
         }
         template <class Alloc>
-        void allgather_3d_array(      complex_t                     *array_3d,
-                                const std::vector<complex_t, Alloc> &output_buf ){
+        void allgather_array(      complex_t                     *array,
+                             const std::vector<complex_t, Alloc> &output_buf ){
             this->_check_buffer_length(output_buf, this->get_n_grid_out());
-            this->allgather_3d_array(array_3d, output_buf.data());
+            this->allgather_array(array, output_buf.data());
         }
-        void allgather_3d_array(      complex_t *array_3d,
-                                const complex_t *output_buf){
-            _impl::fp64_global_mngr.allgather_3d_array(array_3d, output_buf);
+        void allgather_array(      complex_t *array,
+                             const complex_t *output_buf){
+            _impl::fp64_global_mngr.allgather_array(array, output_buf);
         }
-
-        template <class Alloc>
-        void gather_4d_array(      complex_t                     *array_4d,
-                             const std::vector<complex_t, Alloc> &output_buf,
-                             const int                            tgt_proc   ){
-            this->_check_buffer_length(output_buf, this->get_n_grid_out());
-            this->gather_4d_array(array_4d, output_buf.data(), tgt_proc);
-        }
-        void gather_4d_array(      complex_t *array_4d,
-                             const complex_t *output_buf,
-                             const int        tgt_proc   ){
-            _impl::fp64_global_mngr.gather_4d_array(array_4d, output_buf, tgt_proc);
-        }
-        template <class Alloc>
-        void allgather_4d_array(      complex_t                     *array_4d,
-                                const std::vector<complex_t, Alloc> &output_buf ){
-            this->_check_buffer_length(output_buf, this->get_n_grid_out());
-            this->allgather_4d_array(array_4d, output_buf.data());
-        }
-        void allgather_4d_array(      complex_t *array_4d,
-                                const complex_t *output_buf){
-            _impl::fp64_global_mngr.allgather_4d_array(array_4d, output_buf);
-        }
-
-        //----------------------------------------------------------------------
-        //    internal table info (for debug)
-        //----------------------------------------------------------------------
-        void report_convert_matrix(){ _impl::fp64_global_mngr.report_convert_matrix(); }
 
     private:
         template <class Tf, class Alloc>
