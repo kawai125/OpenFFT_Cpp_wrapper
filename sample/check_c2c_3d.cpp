@@ -28,8 +28,6 @@ int main(int argc, char* argv[])
     OpenFFT::dcomplex Input[N1][N2][N3],Output[N1][N2][N3];
     OpenFFT::dcomplex Out[N1][N2][N3]  ,Output_ref[N1][N2][N3];
 
-    TEST::Result test_result;
-
     /* MPI */
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
@@ -262,8 +260,8 @@ int main(int argc, char* argv[])
             print_green("[checking FFT output]\n");
             printf(     "\n");
             print_green("   Manager<>::copy_array_from_output_buffer() & MPI_Allreduce()\n");
-            test_result += TEST::check_3d_array(N1, N2, N3,
-                                                &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+            TEST::check_3d_array(N1, N2, N3,
+                                 &(Output[0][0][0]), &(Output_ref[0][0][0]) );
             printf(     "\n");
         }
         MPI_Barrier(MPI_COMM_WORLD);
@@ -285,8 +283,8 @@ int main(int argc, char* argv[])
                     }
                 }
 
-                test_result += TEST::check_3d_array(N1, N2, N3,
-                                                    &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+                TEST::check_3d_array(N1, N2, N3,
+                                     &(Output[0][0][0]), &(Output_ref[0][0][0]) );
             }
             MPI_Barrier(MPI_COMM_WORLD);
         }
@@ -309,8 +307,8 @@ int main(int argc, char* argv[])
         }
 
         if(myid == 0){
-            test_result += TEST::check_3d_array(N1, N2, N3,
-                                               &(Output[0][0][0]), &(Output_ref[0][0][0]) );
+            TEST::check_3d_array(N1, N2, N3,
+                                 &(Output[0][0][0]), &(Output_ref[0][0][0]) );
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
@@ -449,9 +447,9 @@ int main(int argc, char* argv[])
                     oss << " at proc=" << myid << "\n";
                     printf(oss.str().c_str());
 
-                    test_result += TEST::check_buffer(fft_mngr.get_n_grid_out(),
-                                                      in_out_convert.data(),
-                                                      in_out_convert_ref.data(), myid );
+                    TEST::check_buffer(fft_mngr.get_n_grid_out(),
+                                       in_out_convert.data(),
+                                       in_out_convert_ref.data(), myid );
                 }
                 MPI_Barrier(MPI_COMM_WORLD);
             }
@@ -478,9 +476,9 @@ int main(int argc, char* argv[])
                     oss << " at proc=" << myid << "\n";
                     printf(oss.str().c_str());
 
-                    test_result += TEST::check_buffer(fft_mngr.get_n_grid_in(),
-                                                      out_in_convert.data(),
-                                                      out_in_convert_ref.data(), myid );
+                    TEST::check_buffer(fft_mngr.get_n_grid_in(),
+                                       out_in_convert.data(),
+                                       out_in_convert_ref.data(), myid );
                 }
                 MPI_Barrier(MPI_COMM_WORLD);
             }
@@ -529,8 +527,8 @@ int main(int argc, char* argv[])
             oss << " at proc=" << myid << "\n";
             printf(oss.str().c_str());
 
-            test_result += TEST::check_3d_array(N1, N2, N3,
-                                                &(IFFT_Output[0][0][0]), &(Input[0][0][0]) );
+            TEST::check_3d_array(N1, N2, N3,
+                                 &(IFFT_Output[0][0][0]), &(Input[0][0][0]) );
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
@@ -564,9 +562,9 @@ int main(int argc, char* argv[])
                 for(const auto& index : index_seq){
                     buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ] );
                 }
-                test_result += TEST::check_buffer(My_NumGrid_In,
-                                                  buf.data(),
-                                                  buf_ref.data(), myid );
+                TEST::check_buffer(My_NumGrid_In,
+                                   buf.data(),
+                                   buf_ref.data(), myid );
 
                 for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
                     const int n_grid_in = fft_mngr.get_n_grid_in(tgt_proc);
@@ -581,9 +579,9 @@ int main(int argc, char* argv[])
                     for(const auto& index : index_seq){
                         buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ] );
                     }
-                    test_result += TEST::check_buffer(n_grid_in,
-                                                      buf.data(),
-                                                      buf_ref.data(), myid );
+                    TEST::check_buffer(n_grid_in,
+                                       buf.data(),
+                                       buf_ref.data(), myid );
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
@@ -610,9 +608,9 @@ int main(int argc, char* argv[])
                 for(const auto& index : index_seq){
                     buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
                 }
-                test_result += TEST::check_buffer(My_NumGrid_Out,
-                                                  buf.data(),
-                                                  buf_ref.data(), myid );
+                TEST::check_buffer(My_NumGrid_Out,
+                                   buf.data(),
+                                   buf_ref.data(), myid );
 
                 for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
                     const int n_grid_out = fft_mngr.get_n_grid_out(tgt_proc);
@@ -627,9 +625,9 @@ int main(int argc, char* argv[])
                     for(const auto& index : index_seq){
                         buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ] );
                     }
-                    test_result += TEST::check_buffer(n_grid_out,
-                                                      buf.data(),
-                                                      buf_ref.data(), myid );
+                    TEST::check_buffer(n_grid_out,
+                                       buf.data(),
+                                       buf_ref.data(), myid );
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
@@ -640,7 +638,7 @@ int main(int argc, char* argv[])
     fft_mngr.finalize();
 
     //--- report test result
-    const int final_state = TEST::report(test_result);
+    const int final_state = TEST::report();
 
     MPI_Finalize();
 

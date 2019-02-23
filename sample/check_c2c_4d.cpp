@@ -37,8 +37,6 @@ int main(int argc, char* argv[])
     OpenFFT::dcomplex Output[N1][N2][N3][N4];
     OpenFFT::dcomplex Output_ref[N1][N2][N3][N4];
 
-    TEST::Result test_result;
-
     /* MPI */
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
@@ -244,8 +242,8 @@ int main(int argc, char* argv[])
             print_green("[checking FFT output]\n");
             printf(     "\n");
             print_green("    Manager<>::copy_array_from_output_buffer() & MPI_Allreduce()\n");
-            test_result += TEST::check_4d_array(N1, N2, N3, N4,
-                                                &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
+            TEST::check_4d_array(N1, N2, N3, N4,
+                                 &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
         }
 
         if(myid == 0) printf(     "\n");
@@ -268,8 +266,8 @@ int main(int argc, char* argv[])
                         }
                     }
                 }
-                test_result += TEST::check_4d_array(N1, N2, N3, N4,
-                                                    &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
+                TEST::check_4d_array(N1, N2, N3, N4,
+                                     &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
             }
             MPI_Barrier(MPI_COMM_WORLD);
         }
@@ -294,8 +292,8 @@ int main(int argc, char* argv[])
             if(myid == i_proc){
                 print_green("    Manager<>::allgather_array()");
                 printf(     " at proc=%d\n", i_proc);
-                test_result += TEST::check_4d_array(N1, N2, N3, N4,
-                                                    &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
+                TEST::check_4d_array(N1, N2, N3, N4,
+                                     &(Output[0][0][0][0]), &(Output_ref[0][0][0][0]) );
             }
             MPI_Barrier(MPI_COMM_WORLD);
         }
@@ -406,6 +404,126 @@ int main(int argc, char* argv[])
     }
 
     //==========================================================================
+    //  transpose function test
+    //==========================================================================
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf("\n");
+            print_green("[transpose function test]\n");
+            printf("\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        {
+            std::vector<OpenFFT::dcomplex> input_buf;
+            std::vector<OpenFFT::dcomplex> in_out_convert;
+            std::vector<OpenFFT::dcomplex> in_out_convert_ref;
+
+            in_out_convert_ref.resize( fft_mngr.get_n_grid_out() );
+            fft_mngr.copy_array_into_output_buffer( &(Input[0][0][0][0]), in_out_convert_ref );
+
+            fft_mngr.copy_array_into_input_buffer( &(Input[0][0][0][0]), input_buf );
+
+            fft_mngr.transpose_input_to_output(input_buf, in_out_convert);
+
+            MPI_Barrier(MPI_COMM_WORLD);
+            for(int i_proc=0; i_proc<numprocs; ++i_proc){
+                MPI_Barrier(MPI_COMM_WORLD);
+                if(i_proc == myid){
+                    std::ostringstream oss;
+                    oss_green(oss, "   Manager<>::transpose_input_to_output()");
+                    oss << " at proc=" << myid << "\n";
+                    printf(oss.str().c_str());
+
+                    TEST::check_buffer(fft_mngr.get_n_grid_out(),
+                                       in_out_convert.data(),
+                                       in_out_convert_ref.data(), myid );
+                }
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
+        }
+        if(myid == 0) printf("\n");
+        {
+            std::vector<OpenFFT::dcomplex> output_buf;
+            std::vector<OpenFFT::dcomplex> out_in_convert;
+            std::vector<OpenFFT::dcomplex> out_in_convert_ref;
+
+            fft_mngr.copy_array_into_input_buffer( &(Output[0][0][0][0]), out_in_convert_ref );
+
+            output_buf.resize( fft_mngr.get_n_grid_out() );
+            fft_mngr.copy_array_into_output_buffer( &(Output[0][0][0][0]), output_buf );
+
+            fft_mngr.transpose_output_to_input(output_buf, out_in_convert);
+
+            MPI_Barrier(MPI_COMM_WORLD);
+            for(int i_proc=0; i_proc<numprocs; ++i_proc){
+                MPI_Barrier(MPI_COMM_WORLD);
+                if(i_proc == myid){
+                    std::ostringstream oss;
+                    oss_green(oss, "   Manager<>::convert_output_to_input()");
+                    oss << " at proc=" << myid << "\n";
+                    printf(oss.str().c_str());
+
+                    TEST::check_buffer(fft_mngr.get_n_grid_in(),
+                                       out_in_convert.data(),
+                                       out_in_convert_ref.data(), myid );
+                }
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
+        }
+    }
+
+    //==========================================================================
+    //  inverse FFT test
+    //==========================================================================
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            printf("\n");
+            print_green("[inverse FFT test]\n");
+            printf("\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        OpenFFT::dcomplex IFFT_Output[N1][N2][N3][N4];
+
+        //--- convert output buffer into input buffer.
+        fft_mngr.transpose_output_to_input(output_buffer, input_buffer);
+
+        //--- perform Inverse FFT
+        fft_mngr.fft_c2c_backward(input_buffer, output_buffer);
+
+        //--- collect result
+        fft_mngr.allgather_array( &(IFFT_Output[0][0][0][0]) , output_buffer);
+
+        //--- normalize Inverse FFT result
+        const double N_inv = 1.0/static_cast<double>(N1*N2*N3*N4);
+        for(i=0;i<N1;i++){
+            for(j=0;j<N2;j++){
+                for(k=0;k<N3;k++){
+                    for(m=0;m<N4;m++){
+                        IFFT_Output[i][j][k][m].r *= N_inv;
+                        IFFT_Output[i][j][k][m].i *= N_inv;
+                    }
+                }
+            }
+        }
+
+        //--- check Inverse FFT result
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(myid == 0){
+            std::ostringstream oss;
+            oss_green(oss, "   Manager<>::transpose_output_to_input() & Manager<>::fft_c2c_backward()");
+            oss << " at proc=" << myid << "\n";
+            printf(oss.str().c_str());
+
+            TEST::check_4d_array(N1, N2, N3, N4,
+                                 &(IFFT_Output[0][0][0][0]), &(Input[0][0][0][0]) );
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+
+    //==========================================================================
     //  index sequence generator test
     //==========================================================================
     {
@@ -433,9 +551,9 @@ int main(int argc, char* argv[])
                 for(const auto& index : index_seq){
                     buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ][ index[3] ] );
                 }
-                test_result += TEST::check_buffer(My_NumGrid_In,
-                                                  buf.data(),
-                                                  buf_ref.data(), myid );
+                TEST::check_buffer(My_NumGrid_In,
+                                   buf.data(),
+                                   buf_ref.data(), myid );
 
                 for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
                     const int n_grid_in = fft_mngr.get_n_grid_in(tgt_proc);
@@ -450,9 +568,9 @@ int main(int argc, char* argv[])
                     for(const auto& index : index_seq){
                         buf.push_back( Input[ index[0] ][ index[1] ][ index[2] ][ index[3] ] );
                     }
-                    test_result += TEST::check_buffer(n_grid_in,
-                                                      buf.data(),
-                                                      buf_ref.data(), myid );
+                    TEST::check_buffer(n_grid_in,
+                                       buf.data(),
+                                       buf_ref.data(), myid );
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
@@ -478,9 +596,9 @@ int main(int argc, char* argv[])
                 for(const auto& index : index_seq){
                     buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ][ index[3] ] );
                 }
-                test_result += TEST::check_buffer(My_NumGrid_Out,
-                                                  buf.data(),
-                                                  buf_ref.data(), myid );
+                TEST::check_buffer(My_NumGrid_Out,
+                                   buf.data(),
+                                   buf_ref.data(), myid );
 
                 for(int tgt_proc=0; tgt_proc<numprocs; ++tgt_proc){
                     const int n_grid_out = fft_mngr.get_n_grid_out(tgt_proc);
@@ -495,9 +613,9 @@ int main(int argc, char* argv[])
                     for(const auto& index : index_seq){
                         buf.push_back( Output[ index[0] ][ index[1] ][ index[2] ][ index[3] ] );
                     }
-                    test_result += TEST::check_buffer(n_grid_out,
-                                                      buf.data(),
-                                                      buf_ref.data(), myid );
+                    TEST::check_buffer(n_grid_out,
+                                       buf.data(),
+                                       buf_ref.data(), myid );
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
@@ -509,7 +627,7 @@ int main(int argc, char* argv[])
     fft_mngr.finalize();
 
     //--- report test result
-    const int final_state = TEST::report(test_result);
+    const int final_state = TEST::report();
 
     MPI_Finalize();
 

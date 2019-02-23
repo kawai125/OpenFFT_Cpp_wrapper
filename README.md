@@ -113,13 +113,13 @@ This library is developed in the environment shown in below.
     fft_mngr.copy_array_from_output_buffer( &( GlobalOutput[0][0][0][0] ), output_buffer);
     ```
 
-   - Step 4-2: Transpose the output buffer into the input buffer for Inverse FFT (available in c2c_3D mode only).  
+   - Step 4-2: Transpose the output buffer into the input buffer for Inverse FFT (available in c2c_3D or c2c_4D mode only).  
      ```c++
      fft_mngr.transpose_output_to_input( output_buffer, input_buffer );
      ```
      In this function, communicate the data of 'output_buffer' by using MPI_Alltoallv() and reshape received data into the 'input_buffer'.
 
-   - Step 4-3: Execute Inverse FFT (available in c2c_3D mode only).  
+   - Step 4-3: Execute Inverse FFT (available in c2c_3D or c2c_4D mode only).  
      ```c++
      fft_mngr.fft_c2c_backward( input_buffer, output_buffer );
      ```
@@ -142,10 +142,22 @@ This library is developed in the environment shown in below.
      std::array<int, 8> My_Index_In    = fft_mngr.get_index_in();
      std::array<int, 8> My_Index_Out   = fft_mngr.get_index_out();
 
-     double             elapsed_time   = fft_mngr.get_time();
+     double                elapsed_time = fft_mngr.get_time();
+     OpenFFT::FFT_GridType grid_type    = fft_mngr.get_grid_type();
      ```
 
-     The values of [6] and [7] in "My_Index_In" and "My_Index_Out" are significant only at c2c_4D mode.
+     The values of [6] and [7] in "My_Index_In" and "My_Index_Out" are significant only at c2c_4D mode.  
+     `OpenFFT::FFT_GridType` is enum class type. It is defined as below.
+     ```c++
+     namespace OpenFFT {
+         enum class FFT_GridType {
+             none,
+             r2c_3D,
+             c2c_3D,
+             c2c_4D,
+         };
+     }
+     ```
 
    - Get OpenFFT information of other process.  
      ```c++
