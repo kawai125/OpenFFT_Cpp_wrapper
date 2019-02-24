@@ -153,10 +153,10 @@ namespace OpenFFT {
             using IndexList    = std::array<int, 8>;
 
         private:
-            bool plan_flag               = false;
-            bool convert_flag            = false;
-            bool convert_out_in_mpi_flag = false;
-            bool convert_in_out_mpi_flag = false;
+            bool plan_flag                 = false;
+            bool transpose_flag            = false;
+            bool transpose_out_in_mpi_flag = false;
+            bool transpose_in_out_mpi_flag = false;
 
             FFT_GridType grid_type = FFT_GridType::none;
             int          n_x, n_y, n_z, n_w;
@@ -172,10 +172,10 @@ namespace OpenFFT {
             std::vector<IndexList> index_in_list;
             std::vector<IndexList> index_out_list;
 
-            std::vector<std::vector<int>> convert_out_in_send_index;
-            std::vector<std::vector<int>> convert_out_in_recv_index;
-            std::vector<std::vector<int>> convert_in_out_send_index;
-            std::vector<std::vector<int>> convert_in_out_recv_index;
+            std::vector<std::vector<int>> transpose_out_in_send_index;
+            std::vector<std::vector<int>> transpose_out_in_recv_index;
+            std::vector<std::vector<int>> transpose_in_out_send_index;
+            std::vector<std::vector<int>> transpose_in_out_recv_index;
 
         public:
             GlobalManager() = default;
@@ -235,8 +235,7 @@ namespace OpenFFT {
                 this->n_z = n_z;
                 this->n_w = 0;
 
-                this->_collect_buffer_info(); // enable gather function
-                this->_prepare_convert<3>();  // enable convert function
+                this->_collect_buffer_info();   // enable gather function
                 this->plan_flag = true;
             }
             void init_c2c_4d(const int n_w, const int n_z, const int n_y, const int n_x,
@@ -258,18 +257,17 @@ namespace OpenFFT {
                 this->n_z = n_z;
                 this->n_w = n_w;
 
-                this->_collect_buffer_info();  // enable gather function
-                this->_prepare_convert<4>();   // enable convert function
+                this->_collect_buffer_info();    // enable gather function
                 this->plan_flag = true;
             }
             void finalize(){
                 if( this->plan_flag ){
                     openfft_finalize();
-                    this->plan_flag               = false;
-                    this->convert_flag            = false;
-                    this->convert_out_in_mpi_flag = false;
-                    this->convert_in_out_mpi_flag = false;
-                    this->grid_type               = FFT_GridType::none;
+                    this->plan_flag                 = false;
+                    this->transpose_flag            = false;
+                    this->transpose_out_in_mpi_flag = false;
+                    this->transpose_in_out_mpi_flag = false;
+                    this->grid_type                 = FFT_GridType::none;
 
                     return;
                 }
@@ -585,21 +583,17 @@ namespace OpenFFT {
             void transpose_input_to_output(const Tdata *input_buf,
                                                  Tdata *output_buf){
 
-                this->_check_c2c_only();
+                this->_setup_transpose();
 
-                if( ! this->convert_flag ){
-                    throw std::logic_error("transpose_input_to_output() function is not prepared.");
-                }
-
-                if(this->convert_in_out_mpi_flag){
-                    //--- convert with MPI Alltoall
+                if(this->transpose_in_out_mpi_flag){
+                    //--- transpose with MPI Alltoall
                     const int n_proc = _mpi::get_n_proc();
                     _mpi::CommImpl<Tdata> comm_impl;
                     comm_impl.init(n_proc);
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
                         auto&       send_buf   = comm_impl.get_send_buf(i_proc);
-                        const auto& send_index = this->convert_in_out_send_index[i_proc];
+                        const auto& send_index = this->transpose_in_out_send_index[i_proc];
 
                         send_buf.clear();
 
@@ -613,7 +607,7 @@ namespace OpenFFT {
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
                         const auto& recv_buf   = comm_impl.get_recv_buf(i_proc);
-                        const auto& recv_index = this->convert_in_out_recv_index[i_proc];
+                        const auto& recv_index = this->transpose_in_out_recv_index[i_proc];
 
                         for(size_t ii=0; ii<recv_index.size(); ++ii){
                             const int jj   = recv_index[ii];
@@ -621,7 +615,7 @@ namespace OpenFFT {
                         }
                     }
                 } else {
-                    //--- convert in local
+                    //--- transpose in local
                     const int n_proc  = _mpi::get_n_proc();
                     const int my_rank = _mpi::get_rank();
                     _mpi::CommImpl<Tdata> comm_impl;
@@ -630,7 +624,7 @@ namespace OpenFFT {
                     auto& send_buf = comm_impl.get_send_buf(my_rank);
                     send_buf.clear();
 
-                    const auto& send_index = this->convert_in_out_send_index[my_rank];
+                    const auto& send_index = this->transpose_in_out_send_index[my_rank];
 
                     for(size_t ii=0; ii<send_index.size(); ++ii){
                         const int index = send_index[ii];
@@ -645,7 +639,7 @@ namespace OpenFFT {
                         throw std::logic_error(oss.str());
                     }
 
-                    const auto& recv_index = this->convert_in_out_recv_index[my_rank];
+                    const auto& recv_index = this->transpose_in_out_recv_index[my_rank];
 
                     if( send_index.size() != recv_index.size() ){
                         std::ostringstream oss;
@@ -666,21 +660,17 @@ namespace OpenFFT {
             void transpose_output_to_input(const Tdata *output_buf,
                                                  Tdata *input_buf ){
 
-                this->_check_c2c_only();
+                this->_setup_transpose();
 
-                if( ! this->convert_flag ){
-                    throw std::logic_error("transpose_output_to_input() function is not prepared.");
-                }
-
-                if(this->convert_out_in_mpi_flag){
-                    //--- convert with MPI Alltoall
+                if(this->transpose_out_in_mpi_flag){
+                    //--- transpose with MPI Alltoall
                     const int n_proc = _mpi::get_n_proc();
                     _mpi::CommImpl<Tdata> comm_impl;
                     comm_impl.init(n_proc);
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
                         auto&       send_buf   = comm_impl.get_send_buf(i_proc);
-                        const auto& send_index = this->convert_out_in_send_index[i_proc];
+                        const auto& send_index = this->transpose_out_in_send_index[i_proc];
 
                         send_buf.clear();
 
@@ -694,7 +684,7 @@ namespace OpenFFT {
 
                     for(int i_proc=0; i_proc<n_proc; ++i_proc){
                         const auto& recv_buf   = comm_impl.get_recv_buf(i_proc);
-                        const auto& recv_index = this->convert_out_in_recv_index[i_proc];
+                        const auto& recv_index = this->transpose_out_in_recv_index[i_proc];
 
                         for(size_t ii=0; ii<recv_index.size(); ++ii){
                             const int jj  = recv_index[ii];
@@ -702,7 +692,7 @@ namespace OpenFFT {
                         }
                     }
                 } else {
-                    //--- convert in local
+                    //--- transpose in local
                     const int n_proc  = _mpi::get_n_proc();
                     const int my_rank = _mpi::get_rank();
                     _mpi::CommImpl<Tdata> comm_impl;
@@ -711,7 +701,7 @@ namespace OpenFFT {
                     auto& send_buf = comm_impl.get_send_buf(my_rank);
                     send_buf.clear();
 
-                    const auto& send_index = this->convert_out_in_send_index[my_rank];
+                    const auto& send_index = this->transpose_out_in_send_index[my_rank];
 
                     for(size_t ii=0; ii<send_index.size(); ++ii){
                         const int index = send_index[ii];
@@ -726,7 +716,7 @@ namespace OpenFFT {
                         throw std::logic_error(oss.str());
                     }
 
-                    const auto& recv_index = this->convert_out_in_recv_index[my_rank];
+                    const auto& recv_index = this->transpose_out_in_recv_index[my_rank];
 
                     if( send_index.size() != recv_index.size() ){
                         std::ostringstream oss;
@@ -818,6 +808,24 @@ namespace OpenFFT {
                        oss << "OpenFFT: grid type error. not initialized for 3D-FFT.\n"
                            << "    grid type = " << this->grid_type << "\n";
                     throw std::logic_error(oss.str());
+                }
+            }
+            void _setup_transpose(){
+                this->_check_c2c_only();
+
+                if( ! this->transpose_flag ){
+                    switch (this->grid_type){
+                        case FFT_GridType::c2c_3D:
+                            this->_prepare_transpose<3>();
+                        break;
+
+                        case FFT_GridType::c2c_4D:
+                            this->_prepare_transpose<4>();
+                        break;
+
+                        default:
+                            throw std::logic_error("invalid grid type for transpose function.");
+                    }
                 }
             }
 
@@ -1235,7 +1243,7 @@ namespace OpenFFT {
             }
 
             template <size_t Ndim>
-            void _prepare_convert(){
+            void _prepare_transpose(){
                 static_assert(Ndim == 3 or Ndim == 4);
                 this->_check_c2c_only();
 
@@ -1248,10 +1256,10 @@ namespace OpenFFT {
                                           * std::max(this->n_w, 1);  // n_w == 0 in c2c_3D
                 const size_t n_reserve    = static_cast<size_t>( n_grid_total/(n_proc*n_proc) + 4 );
 
-                this->convert_out_in_send_index.resize( n_proc );
-                this->convert_out_in_recv_index.resize( n_proc );
-                this->convert_in_out_send_index.resize( n_proc );
-                this->convert_in_out_recv_index.resize( n_proc );
+                this->transpose_out_in_send_index.resize( n_proc );
+                this->transpose_out_in_recv_index.resize( n_proc );
+                this->transpose_in_out_send_index.resize( n_proc );
+                this->transpose_in_out_recv_index.resize( n_proc );
 
                 std::vector< std::array<int, Ndim> > index_in_seq, index_out_seq;
                 index_in_seq.reserve( n_reserve);
@@ -1265,7 +1273,7 @@ namespace OpenFFT {
                     this->gen_input_index_sequence( index_in_seq.data(), i_proc );
 
                     //------ make a projection of local output -> other input
-                    auto& send_out_in_index = this->convert_out_in_send_index[i_proc];
+                    auto& send_out_in_index = this->transpose_out_in_send_index[i_proc];
                     send_out_in_index.clear();
                     send_out_in_index.reserve(n_reserve);
                     for(size_t ii=0; ii<index_out_seq.size(); ++ii){
@@ -1278,7 +1286,7 @@ namespace OpenFFT {
                     }
 
                     //------ make a projection of local output <- other input
-                    auto& recv_in_out_index = this->convert_in_out_recv_index[i_proc];
+                    auto& recv_in_out_index = this->transpose_in_out_recv_index[i_proc];
                     recv_in_out_index.clear();
                     recv_in_out_index.reserve(n_reserve);
 
@@ -1300,7 +1308,7 @@ namespace OpenFFT {
                     this->gen_output_index_sequence( index_out_seq.data(), i_proc );
 
                     //------ make a projection of local input -> other output
-                    auto& send_in_out_index = this->convert_in_out_send_index[i_proc];
+                    auto& send_in_out_index = this->transpose_in_out_send_index[i_proc];
                     send_in_out_index.clear();
                     send_in_out_index.reserve(n_reserve);
 
@@ -1314,7 +1322,7 @@ namespace OpenFFT {
                     }
 
                     //------ make a projection of local input <- other output
-                    auto& recv_out_in_index = this->convert_out_in_recv_index[i_proc];
+                    auto& recv_out_in_index = this->transpose_out_in_recv_index[i_proc];
                     recv_out_in_index.clear();
                     recv_out_in_index.reserve(n_reserve);
 
@@ -1329,43 +1337,43 @@ namespace OpenFFT {
                 }
 
                 //--- check consistency
-                this->_check_convert_table();
+                this->_check_transpose_table();
 
-                //--- check MPI communicate is neccesary or not in convert arrays.
+                //--- check MPI communicate is neccesary or not in transpose arrays.
                 bool mpi_in_out_flag = false;
                 bool mpi_out_in_flag = false;
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
                     if(i_proc == my_rank) continue;
-                    if(this->convert_in_out_send_index.at(i_proc).size() > 0) mpi_in_out_flag = true;
-                    if(this->convert_out_in_send_index.at(i_proc).size() > 0) mpi_out_in_flag = true;
+                    if(this->transpose_in_out_send_index.at(i_proc).size() > 0) mpi_in_out_flag = true;
+                    if(this->transpose_out_in_send_index.at(i_proc).size() > 0) mpi_out_in_flag = true;
                 }
-                this->convert_in_out_mpi_flag = _mpi::sync_OR(mpi_in_out_flag);
-                this->convert_out_in_mpi_flag = _mpi::sync_OR(mpi_out_in_flag);
+                this->transpose_in_out_mpi_flag = _mpi::sync_OR(mpi_in_out_flag);
+                this->transpose_out_in_mpi_flag = _mpi::sync_OR(mpi_out_in_flag);
 
-                //--- preparing for convert was completed
-                this->convert_flag = true;
+                //--- preparing for transpose was completed
+                this->transpose_flag = true;
             }
 
-            void _check_convert_table() const {
+            void _check_transpose_table() const {
                 const int n_proc  = _mpi::get_n_proc();
 
                 //--- check send grid size
                 int n_grid_in  = 0;
                 int n_grid_out = 0;
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    n_grid_in  += this->convert_in_out_send_index.at(i_proc).size();
-                    n_grid_out += this->convert_out_in_send_index.at(i_proc).size();
+                    n_grid_in  += this->transpose_in_out_send_index.at(i_proc).size();
+                    n_grid_out += this->transpose_out_in_send_index.at(i_proc).size();
                 }
                 if( n_grid_in != this->get_n_grid_in() ){
                     std::ostringstream oss;
-                    oss << "internal error: failure to make 'convert_in_out_send_index'\n"
+                    oss << "internal error: failure to make 'transpose_in_out_send_index'\n"
                         << "   total len = " << n_grid_in
                         << ", must be = " << this->get_n_grid_in() << " (= n_grid_in).\n";
                     throw std::logic_error(oss.str());
                 }
                 if( n_grid_out != this->get_n_grid_out() ){
                     std::ostringstream oss;
-                    oss << "internal error: failure to make 'convert_out_in_send_index'\n"
+                    oss << "internal error: failure to make 'transpose_out_in_send_index'\n"
                         << "   total len = " << n_grid_out
                         << ", must be = " << this->get_n_grid_out() << " (= n_grid_out).\n";
                     throw std::logic_error(oss.str());
@@ -1375,19 +1383,19 @@ namespace OpenFFT {
                 n_grid_in  = 0;
                 n_grid_out = 0;
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
-                    n_grid_in  += this->convert_out_in_recv_index.at(i_proc).size();
-                    n_grid_out += this->convert_in_out_recv_index.at(i_proc).size();
+                    n_grid_in  += this->transpose_out_in_recv_index.at(i_proc).size();
+                    n_grid_out += this->transpose_in_out_recv_index.at(i_proc).size();
                 }
                 if( n_grid_in != this->get_n_grid_in() ){
                     std::ostringstream oss;
-                    oss << "internal error: failure to make 'convert_out_in_recv_index'\n"
+                    oss << "internal error: failure to make 'transpose_out_in_recv_index'\n"
                         << "   total len = " << n_grid_in
                         << ", must be = " << this->get_n_grid_in() << " (= n_grid_in).\n";
                     throw std::logic_error(oss.str());
                 }
                 if( n_grid_out != this->get_n_grid_out() ){
                     std::ostringstream oss;
-                    oss << "internal error: failure to make 'convert_in_out_recv_index'\n"
+                    oss << "internal error: failure to make 'transpose_in_out_recv_index'\n"
                         << "   total len = " << n_grid_out
                         << ", must be = " << this->get_n_grid_out() << " (= n_grid_out).\n";
                     throw std::logic_error(oss.str());
