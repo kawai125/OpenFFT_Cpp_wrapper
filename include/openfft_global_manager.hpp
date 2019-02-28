@@ -1234,6 +1234,168 @@ namespace OpenFFT {
                 return apply_interface.func;
             }
 
+            bool _is_input_range(const std::array<int, 3> tgt, const IndexList index_in) const {
+                if(index_in[0] == index_in[3]){
+                    if( tgt[0] == index_in[0] ){
+                        if( index_in[1]<=tgt[1] && tgt[1]<=index_in[4] ){
+                            if( index_in[2]<=tgt[2] && tgt[2]<=index_in[5] ) return true;
+                        }
+                    }
+                } else if (index_in[0] < index_in[3]){
+                    if( tgt[0] == index_in[0] ){
+                        if( index_in[1]<=tgt[1] && tgt[1]<this->n_y ){
+                            if( index_in[2]<=tgt[2] && tgt[2]<=index_in[5] ) return true;
+                        }
+                    } else if( index_in[0]<=tgt[0] && tgt[0]<=index_in[3] ){
+                        if( 0<=tgt[1] && tgt[1]<this->n_y ){
+                            if( index_in[2]<=tgt[2] && tgt[2]<=index_in[5] ) return true;
+                        }
+                    } else if( tgt[0] == index_in[3] ){
+                        if( 0<=tgt[1] && tgt[1]<=index_in[4] ){
+                            if( index_in[2]<=tgt[2] && tgt[2]<=index_in[5] ) return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            bool _is_output_range(const std::array<int, 3> tgt, const IndexList index_out) const {
+                if(index_out[0] == index_out[3]){
+                    if( tgt[2] == index_out[0] ){
+                        if( index_out[1]<=tgt[1] && tgt[1]<=index_out[4] ){
+                            if( index_out[2]<=tgt[0] && tgt[0]<=index_out[5] ) return true;
+                        }
+                    }
+                } else if(index_out[0] < index_out[3]){
+                    if( tgt[2] == index_out[0] ){
+                        if( index_out[1]<=tgt[1] && tgt[1]<this->n_y ){
+                            if( index_out[2]<=tgt[0] && tgt[0]<=index_out[5] ) return true;
+                        }
+                    } else if( index_out[0]<tgt[2] && tgt[2]<index_out[3] ){
+                        if( 0<=tgt[1] && tgt[1]<this->n_y ){
+                            if( index_out[2]<=tgt[0] && tgt[0]<=index_out[5] ) return true;
+                        }
+                    } else if( tgt[2] == index_out[3] ){
+                        if( 0<=tgt[1] && tgt[1]<=index_out[4] ){
+                            if( index_out[2]<=tgt[0] && tgt[0]<=index_out[5] ) return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            bool _is_input_range(const std::array<int, 4> tgt, const IndexList index_in) const {
+                if(index_in[0] == index_in[4]){
+                    if( tgt[0] == index_in[0] ){
+                        if( index_in[1] == index_in[5] ){
+                            if( tgt[1] == index_in[1] ){
+                                if( index_in[2]<=tgt[2] && tgt[2]<=index_in[6] ){
+                                    if( index_in[3]<=tgt[3] && tgt[3]<=index_in[7] ) return true;
+                                }
+                            }
+                        } else if(index_in[1] < index_in[5]){
+                            if( tgt[1] == index_in[1] ){
+                                if( index_in[2]<=tgt[2] && tgt[2]<this->n_y ){
+                                    if( index_in[3]<=tgt[3] && tgt[3]<=index_in[7] ) return true;
+                                }
+                            } else if( index_in[1]<tgt[1] && tgt[1]<index_in[5] ){
+                                if( 0<=tgt[2] && tgt[2]<this->n_y ){
+                                    if( index_in[3]<=tgt[3] && tgt[3]<=index_in[7] ) return true;
+                                }
+                            } else if( tgt[1] == index_in[5] ){
+                                if( 0<=tgt[2] && tgt[2]<=index_in[6] ){
+                                    if( index_in[3]<=tgt[3] && tgt[3]<=index_in[7] ) return true;
+                                }
+                            }
+                        }
+                    }
+                } else if(index_in[0] < index_in[4]){
+                    if( tgt[0] == index_in[0] ){
+                        if( tgt[1] == index_in[1] ){
+                            if( index_in[2]<=tgt[2] && tgt[2]<this->n_y ){
+                                if( index_in[3]<=tgt[3] && tgt[3]<=index_in[7] ) return true;
+                            }
+                        } else if( index_in[1]<tgt[1] && tgt[1]<this->n_z ){
+                            if( 0<=tgt[2] && tgt[2]<this->n_y ){
+                                if( index_in[3]<=tgt[3] && tgt[3]<=index_in[7] ) return true;
+                            }
+                        }
+                    } else if( index_in[0]<tgt[0] && tgt[0]<index_in[4] ){
+                        if( 0<=tgt[1] && tgt[1]<this->n_z ){
+                            if( 0<=tgt[2] && tgt[2]<this->n_y ){
+                                if( index_in[3]<=tgt[3] && tgt[3]<=index_in[7] ) return true;
+                            }
+                        }
+                    } else if( tgt[0] == index_in[4] ){
+                        if( tgt[1] == index_in[5] ){
+                            if( 0<=tgt[2] && tgt[2]<=index_in[6] ){
+                                if( index_in[3]<=tgt[3] && tgt[3]<=index_in[7] ) return true;
+                            }
+                        } else if( 0<=tgt[1] && tgt[1]<index_in[5] ){
+                            if( 0<=tgt[2] && tgt[2]<this->n_y ){
+                                if( index_in[3]<=tgt[3] && tgt[3]<=index_in[7] ) return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+            bool _is_output_range(const std::array<int, 4> tgt, const IndexList index_out) const {
+                if(index_out[0] == index_out[4]){
+                    if( tgt[3] == index_out[0] ){
+                        if( index_out[1] == index_out[5] ){
+                            if( tgt[2] == index_out[1] ){
+                                if( index_out[2]<=tgt[1] && tgt[1]<=index_out[6] ){
+                                    if( index_out[3]<=tgt[0] && tgt[0]<=index_out[7] ) return true;
+                                }
+                            }
+                        } else if( index_out[1] < index_out[5] ){
+                            if( tgt[2] == index_out[1] ){
+                                if( index_out[2]<=tgt[1] && tgt[1]<this->n_z ){
+                                    if( index_out[3]<=tgt[0] && tgt[0]<=index_out[7] ) return true;
+                                }
+                            } else if( index_out[1]<tgt[2] && tgt[2]<index_out[5] ){
+                                if( 0<=tgt[1] && tgt[1]<this->n_z ){
+                                    if( index_out[3]<=tgt[0] && tgt[0]<=index_out[7] ) return true;
+                                }
+                            } else if( tgt[2] == index_out[5] ){
+                                if( 0<=tgt[1] && tgt[1]<=index_out[6] ){
+                                    if( index_out[3]<=tgt[0] && tgt[0]<=index_out[7] ) return true;
+                                }
+                            }
+                        }
+                    }
+                } else if(index_out[0] < index_out[4]){
+                    if( tgt[3] == index_out[0] ){
+                        if( tgt[2] == index_out[1] ){
+                            if( index_out[2]<=tgt[1] && tgt[1]<this->n_z ){
+                                if( index_out[3]<=tgt[0] && tgt[0]<=index_out[7] ) return true;
+                            }
+                        } else if( index_out[1]<tgt[2] && tgt[2]<this->n_y ){
+                            if( 0<=tgt[1] && tgt[1]<this->n_z ){
+                                if( index_out[3]<=tgt[0] && tgt[0]<=index_out[7] ) return true;
+                            }
+                        }
+                    } else if( index_out[0]<tgt[3] && tgt[3]<index_out[4] ){
+                        if( 0<=tgt[2] && tgt[2]<this->n_y ){
+                            if( 0<=tgt[1] && tgt[1]<this->n_z ){
+                                if( index_out[3]<=tgt[0] && tgt[0]<=index_out[7] ) return true;
+                            }
+                        }
+                    } else if( tgt[3] == index_out[4] ){
+                        if( tgt[2] == index_out[5] ){
+                            if( 0<=tgt[1] && tgt[1]<=index_out[6] ){
+                                if( index_out[3]<=tgt[0] && tgt[0]<=index_out[7] ) return true;
+                            }
+                        } else if( 0<=tgt[2] && tgt[2]<index_out[5] ){
+                            if( 0<=tgt[1] && tgt[1]<this->n_z ){
+                                if( index_out[3]<=tgt[0] && tgt[0]<=index_out[7] ) return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+
             void _collect_buffer_info(){
                 //--- collect range info
                 _mpi::allgather(this->my_n_grid_in , this->n_grid_in_list );
@@ -1267,10 +1429,12 @@ namespace OpenFFT {
 
                 //--- search between local output <-> other input
                 index_out_seq.resize( this->get_n_grid_out() );
-                this->gen_output_index_sequence(  index_out_seq.data()  );
+                this->gen_output_index_sequence( index_out_seq.data() );
+                const auto index_out_local = this->get_index_out();
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
                     index_in_seq.resize( this->get_n_grid_in(i_proc) );
                     this->gen_input_index_sequence( index_in_seq.data(), i_proc );
+                    const auto index_in_other = this->get_index_in( i_proc );
 
                     //------ make a projection of local output -> other input
                     auto& send_out_in_index = this->transpose_out_in_send_index[i_proc];
@@ -1278,9 +1442,14 @@ namespace OpenFFT {
                     send_out_in_index.reserve(n_reserve);
                     for(size_t ii=0; ii<index_out_seq.size(); ++ii){
                         const auto index_out = index_out_seq[ii];
+
+                        //------ range check (pruning)
+                        if( ! this->_is_input_range(index_out, index_in_other) ) continue;
+
                         for(size_t jj=0; jj<index_in_seq.size(); ++jj){
                             if(index_out == index_in_seq[jj]){
                                 send_out_in_index.emplace_back(ii);
+                                break;
                             }
                         }
                     }
@@ -1289,12 +1458,16 @@ namespace OpenFFT {
                     auto& recv_in_out_index = this->transpose_in_out_recv_index[i_proc];
                     recv_in_out_index.clear();
                     recv_in_out_index.reserve(n_reserve);
-
                     for(size_t ii=0; ii<index_in_seq.size(); ++ii){
                         const auto index_in = index_in_seq[ii];
+
+                        //------ range check (pruning)
+                        if( ! this->_is_output_range(index_in, index_out_local) ) continue;
+
                         for(size_t jj=0; jj<index_out_seq.size(); ++jj){
                             if(index_in == index_out_seq[jj]){
                                 recv_in_out_index.emplace_back(jj);
+                                break;
                             }
                         }
                     }
@@ -1302,21 +1475,27 @@ namespace OpenFFT {
 
                 //--- search between local input <-> other output
                 index_in_seq.resize( this->get_n_grid_in() );
-                this->gen_input_index_sequence(  index_in_seq.data()  );
+                this->gen_input_index_sequence( index_in_seq.data() );
+                const auto index_in_local = this->get_index_in();
                 for(int i_proc=0; i_proc<n_proc; ++i_proc){
                     index_out_seq.resize( this->get_n_grid_out(i_proc) );
                     this->gen_output_index_sequence( index_out_seq.data(), i_proc );
+                    const auto index_out_other = this->get_index_out( i_proc );
 
                     //------ make a projection of local input -> other output
                     auto& send_in_out_index = this->transpose_in_out_send_index[i_proc];
                     send_in_out_index.clear();
                     send_in_out_index.reserve(n_reserve);
-
                     for(size_t ii=0; ii<index_in_seq.size(); ++ii){
                         const auto index_in = index_in_seq[ii];
+
+                        //------ range check (pruning)
+                        if( ! this->_is_output_range(index_in, index_out_other) ) continue;
+
                         for(size_t jj=0; jj<index_out_seq.size(); ++jj){
                             if(index_in == index_out_seq[jj]){
                                 send_in_out_index.emplace_back(ii);
+                                break;
                             }
                         }
                     }
@@ -1325,12 +1504,16 @@ namespace OpenFFT {
                     auto& recv_out_in_index = this->transpose_out_in_recv_index[i_proc];
                     recv_out_in_index.clear();
                     recv_out_in_index.reserve(n_reserve);
-
                     for(size_t ii=0; ii<index_out_seq.size(); ++ii){
                         const auto index_out = index_out_seq[ii];
+
+                        //------ range check (pruning)
+                        if( ! this->_is_input_range(index_out, index_in_local) ) continue;
+
                         for(size_t jj=0; jj<index_in_seq.size(); ++jj){
                             if(index_out == index_in_seq[jj]){
                                 recv_out_in_index.emplace_back(jj);
+                                break;
                             }
                         }
                     }
