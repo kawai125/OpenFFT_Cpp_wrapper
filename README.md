@@ -100,15 +100,15 @@ This library is developed in the environment shown in below.
 
   - Step 4: write back the local output buffer data into the local 3D/4D array.  
     ```c++
-    //--- write back for r2c 3D FFT
+    //--- write back for r2c_3D FFT
     OpenFFT::dcomplex LocalOutput[N1][N2][N3r];   // N3r = N3/2+1
     fft_mngr.copy_array_from_output_buffer( &( GlobalOutput[0][0][0] ), output_buffer);
 
-    //--- write back for c2c 3D FFT
+    //--- write back for c2c_3D FFT
     OpenFFT::dcomplex LocalOutput[N1][N2][N3];
     fft_mngr.copy_array_from_output_buffer( &( GlobalOutput[0][0][0] ), output_buffer);
 
-    //--- write back for c2c 4D FFT
+    //--- write back for c2c_4D FFT
     OpenFFT::dcomplex LocalOutput[N1][N2][N3][N4];
     fft_mngr.copy_array_from_output_buffer( &( GlobalOutput[0][0][0][0] ), output_buffer);
     ```
@@ -129,10 +129,10 @@ This library is developed in the environment shown in below.
      ```c++
      fft_mngr.finalize();
      ```
-     The OpenFFT configurations are shared in global manager object (It allows you to make many instance of OpenFFT::Manager<>).  
+     The OpenFFT configurations are shared in global manager object (It allows you to make many instance of `OpenFFT::Manager<>`).  
      It is recommended that you call the 'finalize' function at once in finalization part of your program.
 
-## Other APIs
+## Other API
 
    - Get OpenFFT information of local process.  
      ```c++
@@ -203,7 +203,8 @@ This library is developed in the environment shown in below.
 
      fft_mngr.gather_array( &( YourGlobalOutput[0][0][0] ), your_output, tgt_proc );
      ```
-     These 'gather' functions accept any type of 3D/4D array and buffer (defined as template class).
+     These 'gather' functions accept any type of 3D/4D array and buffer (defined as template class).  
+     The gather interface may reduce data transport than using `MPI_Reduce()` or `MPI_Allreduce()` to make global array.
 
    - Apply your function between global 3D/4D array and local input/output buffer.  
      ```c++
@@ -254,7 +255,7 @@ This library is developed in the environment shown in below.
      MPI_Allreduce( &local_sum.v, &global_sum, 1
                    MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
      ```
-     These 'apply' functions accept any type of 3D/4D array and buffer (both of input are defined as template class respectively).
+     The apply interface accept any type of 3D/4D array and buffer (both of input are defined as template class respectively).
      ```c++
      //--- perform 'apply' between user-defined class array and buffer.
      struct ArrayClass {
@@ -332,7 +333,7 @@ This library is developed in the environment shown in below.
      }
      ```
 
-     These APIs are useful to make the data part in local process.
+     The index sequence generator interface is useful to make the data part in local process.
 
    - Transpose functions with user-defined data class.
      ```c++
@@ -350,7 +351,7 @@ This library is developed in the environment shown in below.
      //--- transpose output_buf -> input_buf
      fft_mngr.transpose_output_to_input(output_buf, input_buf);
      ```
-     These 'transpose' functions accept any type of buffer (defined as template class).
+     The transpose interface accept any type of buffer (defined as template class).
 
 ## Note
 Makefile configuration example for OpenFFT library.  
