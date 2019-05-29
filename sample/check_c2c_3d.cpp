@@ -634,6 +634,35 @@ int main(int argc, char* argv[])
         }
     }
 
+    //==========================================================================
+    //  MPI buffer size manager test
+    //==========================================================================
+    MPI_Barrier(MPI_COMM_WORLD);
+    if(myid == 0){
+        printf("\n");
+        print_green("[MPI buffer size manager test]\n");
+        printf("\n");
+
+        const size_t sz_before = fft_mngr.get_buf_size<OpenFFT::dcomplex>();
+        fft_mngr.shrink_buf<OpenFFT::dcomplex>(4);
+        const size_t sz_after  = fft_mngr.get_buf_size<OpenFFT::dcomplex>();
+
+        std::ostringstream oss;
+        oss << "   buffer size for <OpenFFT::dcomplex> = " << sz_before << "\n"
+            << "                             shrink to = " << sz_after  << "\n";
+
+        const bool check = (sz_before > sz_after);
+        if( !check ){
+            oss_red(oss, "  [ FAILED ]");
+            oss << "\n";
+        }
+        TEST::global_result += check;
+
+        printf(oss.str().c_str());
+
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+
     /* Finalize OpenFFT */
     fft_mngr.finalize();
 

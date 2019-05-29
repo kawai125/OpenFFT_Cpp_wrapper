@@ -278,14 +278,19 @@ namespace OpenFFT {
                         n_recv.resize(n_proc);
                         n_recv_disp.resize(n_proc+1);
                     }
+
+                    std::pair<size_t, size_t> get_buf_size() const {
+                        const size_t n_proc = mpi_send_buf.size();
+                        size_t sz_send = 0;
+                        size_t sz_recv = 0;
+                        for(size_t i_proc=0; i_proc<n_proc; ++i_proc){
+                            sz_send += mpi_send_buf.capacity();
+                            sz_recv += mpi_recv_buf.capacity();
+                        }
+                        return std::make_pair(sz_send, sz_recv);
+                    }
                     void shrink_buf(const size_t sz = 4){
                         const size_t n_proc = mpi_send_buf.size();
-
-                        send_data.resize(sz);
-                        recv_data.resize(sz);
-                        send_data.shrink_to_fit();
-                        recv_data.shrink_to_fit();
-
                         for(size_t i_proc=0; i_proc<n_proc; ++i_proc){
                             auto& sb = mpi_send_buf.at(i_proc);
                             auto& rb = mpi_recv_buf.at(i_proc);
@@ -295,6 +300,15 @@ namespace OpenFFT {
                             sb.shrink_to_fit();
                             rb.shrink_to_fit();
                         }
+                    }
+                    std::pair<size_t, size_t> get_inter_buf_size() const {
+                        return std::make_pair( send_data.capacity(), recv_data.capacity() );
+                    }
+                    void shrink_inter_buf(const size_t sz = 16){
+                        send_data.resize(sz);
+                        recv_data.resize(sz);
+                        send_data.shrink_to_fit();
+                        recv_data.shrink_to_fit();
                     }
 
                     std::vector<Tdata>&       get_send_buf(const int i_proc) const { return mpi_send_buf.at(i_proc); }

@@ -212,6 +212,7 @@ namespace OpenFFT {
                   class T_buf, class Alloc_buf>
         void copy_array_into_input_buffer(const T_arr                         *array,
                                                 std::vector<T_buf, Alloc_buf> &buffer) const {
+            buffer.reserve(this->get_max_n_grid());
             buffer.resize(this->get_n_grid_in());
             this->copy_array_into_input_buffer(array, buffer.data());
         }
@@ -304,6 +305,7 @@ namespace OpenFFT {
                   class T_buf, class Alloc_buf>
         void copy_array_into_output_buffer(const T_arr                         *array,
                                                  std::vector<T_buf, Alloc_buf> &buffer) const {
+            buffer.reserve(this->get_max_n_grid());
             buffer.resize(this->get_n_grid_out());
             this->copy_array_into_output_buffer(array, buffer.data());
         }
@@ -497,6 +499,18 @@ namespace OpenFFT {
         void allgather_array(      Tdata *array,
                              const Tdata *output_buf){
             _impl::fp64_global_mngr.allgather_array(array, output_buf);
+        }
+
+        //----------------------------------------------------------------------
+        //    MPI buffer size manager
+        //----------------------------------------------------------------------
+        template <class Tdata>
+        size_t get_buf_size() const {
+            return _impl::fp64_global_mngr.get_buf_size<Tdata>();
+        }
+        template <class Tdata>
+        void shrink_buf(const size_t sz){
+            _impl::fp64_global_mngr.shrink_buf<Tdata>(sz);
         }
 
     private:

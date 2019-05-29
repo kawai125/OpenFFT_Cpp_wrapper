@@ -773,6 +773,31 @@ namespace OpenFFT {
                 }
             }
 
+            //----------------------------------------------------------------------
+            //    MPI buffer size manager
+            //----------------------------------------------------------------------
+            template <class Tdata>
+            size_t get_buf_size() const {
+                _mpi::CommImpl<Tdata> comm_impl;
+
+                const auto sz_b  = comm_impl.get_buf_size();
+                const auto sz_ib = comm_impl.get_inter_buf_size();
+
+                return  sz_b.first  + sz_b.second
+                      + sz_ib.first + sz_ib.second;
+            }
+            template <class Tdata>
+            void shrink_buf(const size_t sz){
+                const size_t n_proc = _mpi::get_n_proc();
+                _mpi::CommImpl<Tdata> comm_impl;
+
+                size_t sz_b = sz/n_proc;
+                if(sz%n_proc > 0) sz_b += 1;
+
+                comm_impl.shrink_buf(sz_b);
+                comm_impl.shrink_inter_buf(sz);
+            }
+
         private:
             void _check_rank(const int i) const {
                 #ifndef NDEBUG

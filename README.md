@@ -353,16 +353,37 @@ This library is developed in the environment shown in below.
      ```
      The transpose interface accept any type of buffer (defined as template class).
 
+   - Buffer size management interface for gather/transpose API
+     ```c++
+     struct YourData {
+         // define anything your data.
+     };
+
+     //
+     //  after you called gather or transpose function of OpenFFT::Manager.
+     //
+
+     //--- get buffer size
+     const size_t sz_buf = fft_mngr.get_buf_size<YourData>();
+
+     //--- resize buffer size
+     const size_t sz_buf_new = 4;  // your target size
+     fft_mngr.shrink_buf<YourData>(sz_buf_new);
+     ```
+     The buffer for gather/transpose API will be allocated for each data type.  
+     The minimum shrinked buffer size is `sz_min = 4 * sz_buf_new`.
+
 ## Note
-Makefile configuration example for OpenFFT library.  
-The setting example is validated at the environment shown in below.  
-  - GCC 6.4
-  - OpenMPI 2.1.2
-  - FFTW 3.3.7
-  - OpenFFT 1.2
+Makefile configuration example to compile the OpenFFT library.  
 
 ```makefile
 CC  = mpicc -O3 -fopenmp -I$(YOUR_FFTW_DIR)/include -I./include
 LIB = -L$(YOUR_FFTW_DIR)/lib -lfftw3 -lfftw3_omp -lm
 FC  = 0
 ```
+
+The setting example is validated at the environment shown in below.  
+  - GCC 6.4
+  - OpenMPI 2.1.2
+  - FFTW 3.3.7
+  - OpenFFT 1.2
